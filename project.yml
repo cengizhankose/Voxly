@@ -1,0 +1,49 @@
+name: Voxly
+options:
+  bundleIdPrefix: com.voxly
+  deploymentTarget:
+    macOS: "13.0"
+  xcodeVersion: "15.0"
+  createIntermediateGroups: true
+
+packages:
+  KeyboardShortcuts:
+    url: https://github.com/sindresorhus/KeyboardShortcuts
+    from: "2.0.0"
+
+targets:
+  Voxly:
+    type: application
+    platform: macOS
+    sources:
+      - Sources/Voxly
+    resources:
+      - Resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.voxly.app
+        PRODUCT_NAME: Voxly
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "5.9"
+        MACOSX_DEPLOYMENT_TARGET: "13.0"
+        INFOPLIST_FILE: Support/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Support/Voxly.entitlements
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGN_STYLE: Manual
+        ENABLE_HARDENED_RUNTIME: false
+        SWIFT_OBJC_BRIDGING_HEADER: Sources/Voxly/Voxly-Bridging-Header.h
+        OTHER_LDFLAGS:
+          - "-lc++"
+        HEADER_SEARCH_PATHS:
+          - "$(PROJECT_DIR)/Frameworks/whisper.xcframework/macos-arm64_x86_64/Headers"
+        FRAMEWORK_SEARCH_PATHS:
+          - "$(PROJECT_DIR)/Frameworks"
+    dependencies:
+      - package: KeyboardShortcuts
+      - framework: Frameworks/whisper.xcframework
+        embed: true
+    info:
+      path: Support/Info.plist
+    entitlements:
+      path: Support/Voxly.entitlements

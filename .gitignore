@@ -1,0 +1,36 @@
+# Xcode
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+DerivedData/
+build/
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Build artifacts
+.build-whisper/
+
+# XCFramework (built from source)
+Frameworks/whisper.xcframework/
+
+# Whisper model (142MB, downloaded separately)
+Resources/ggml-base.bin
+
+# Metal shaders (generated during build)
+Resources/*.metallib
+
+# macOS
+.DS_Store
+*.swp
+*~
+
+# SPM
+.build/
+Package.resolved
