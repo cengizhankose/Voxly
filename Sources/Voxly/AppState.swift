@@ -63,6 +63,10 @@ final class AppState: ObservableObject {
             return
         }
 
+        // Capture the app that owns the focused text field BEFORE we touch
+        // the menu bar UI / popover, so paste can target it later.
+        textInserter.captureFrontmostApp()
+
         do {
             try audioRecorder.start()
             isRecording = true
