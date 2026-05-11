@@ -17,6 +17,11 @@ final class PermissionsManager {
         }
     }
 
+    /// Non-prompting current state. Used for refresh checks.
+    func checkMicrophoneAccessSync() -> Bool {
+        AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
+    }
+
     func checkAccessibility() -> Bool {
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue(): false] as CFDictionary
         return AXIsProcessTrustedWithOptions(options)

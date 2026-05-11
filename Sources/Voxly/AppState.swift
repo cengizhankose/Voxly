@@ -1,5 +1,9 @@
 import SwiftUI
+import AppKit
 import KeyboardShortcuts
+import os
+
+private let log = Logger(subsystem: "com.voxly.app", category: "AppState")
 
 @MainActor
 final class AppState: ObservableObject {
@@ -13,7 +17,8 @@ final class AppState: ObservableObject {
     private let audioRecorder = AudioRecorder()
     private let whisperEngine = WhisperEngine()
     private let textInserter = TextInserter()
-    private let permissionsManager = PermissionsManager()
+    let permissionsManager = PermissionsManager()
+    private var permissionPollTimer: Timer?
 
     init() {
         Task {
@@ -21,6 +26,7 @@ final class AppState: ObservableObject {
             await checkPermissions()
             await loadModel()
         }
+        observeAppActivation()
     }
 
     private func setupHotkey() {
@@ -33,19 +39,75 @@ final class AppState: ObservableObject {
 
     func checkPermissions() async {
         micPermissionGranted = await permissionsManager.requestMicrophoneAccess()
+        let prev = accessibilityGranted
         accessibilityGranted = permissionsManager.checkAccessibility()
+        if prev != accessibilityGranted {
+            log.info("Accessibility changed: \(prev) -> \(self.accessibilityGranted)")
+        }
+    }
+
+    /// Re-check Accessibility without prompting. Mic status is sticky after grant
+    /// (TCC reports it without prompt), so single call is fine.
+    func refreshPermissions() {
+        let prevAcc = accessibilityGranted
+        let prevMic = micPermissionGranted
+        accessibilityGranted = permissionsManager.checkAccessibility()
+        micPermissionGranted = permissionsManager.checkMicrophoneAccessSync()
+        if prevAcc != accessibilityGranted || prevMic != micPermissionGranted {
+            log.info("Permissions refreshed: mic \(prevMic)->\(self.micPermissionGranted), acc \(prevAcc)->\(self.accessibilityGranted)")
+        }
+    }
+
+    /// Open Accessibility settings, then poll for grant so UI updates without
+    /// requiring app focus change.
+    func requestAccessibility() {
+        permissionsManager.promptAccessibility()
+        startPermissionPolling()
+    }
+
+    private func observeAppActivation() {
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.refreshPermissions() }
+        }
+    }
+
+    private func startPermissionPolling() {
+        permissionPollTimer?.invalidate()
+        permissionPollTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] timer in
+            Task { @MainActor in
+                guard let self = self else { timer.invalidate(); return }
+                self.refreshPermissions()
+                if self.accessibilityGranted {
+                    timer.invalidate()
+                    self.permissionPollTimer = nil
+                    log.info("Stopped permission polling after grant")
+                }
+            }
+        }
+        // Auto-stop after 60s regardless to avoid leak
+        DispatchQueue.main.asyncAfter(deadline: .now() + 60) { [weak self] in
+            self?.permissionPollTimer?.invalidate()
+            self?.permissionPollTimer = nil
+        }
     }
 
     private func loadModel() async {
         statusMessage = "Loading model..."
         let modelPath = modelFilePath()
+        log.info("Model path resolved: \(modelPath, privacy: .public)")
 
         guard FileManager.default.fileExists(atPath: modelPath) else {
+            log.error("Model file missing at: \(modelPath, privacy: .public)")
             statusMessage = "Model not found. Run download script first."
             return
         }
 
         let loaded = await whisperEngine.loadModel(path: modelPath)
+        log.info("Model loaded: \(loaded)")
         statusMessage = loaded ? "Ready" : "Failed to load model"
     }
 
@@ -81,17 +143,21 @@ final class AppState: ObservableObject {
         isRecording = false
         statusMessage = "Transcribing..."
         isTranscribing = true
+        log.info("Recording stopped, starting transcription")
 
         Task {
             let audioData = audioRecorder.getAudioData()
+            log.info("Captured \(audioData.count) audio samples (~\(Double(audioData.count) / 16000.0, format: .fixed(precision: 2))s)")
 
             guard !audioData.isEmpty else {
+                log.error("No audio data captured")
                 statusMessage = "No audio captured"
                 isTranscribing = false
                 return
             }
 
             let text = await whisperEngine.transcribe(audioData: audioData)
+            log.info("Transcription result: '\(text, privacy: .public)' (length: \(text.count))")
 
             if text.isEmpty {
                 statusMessage = "No speech detected"
@@ -100,9 +166,11 @@ final class AppState: ObservableObject {
                 statusMessage = "Inserting text..."
 
                 if accessibilityGranted {
+                    log.info("Inserting text via Cmd+V")
                     textInserter.insertText(text)
                     statusMessage = "Done"
                 } else {
+                    log.warning("Accessibility not granted, clipboard only")
                     statusMessage = "Text copied (enable Accessibility for auto-paste)"
                     textInserter.copyToClipboard(text)
                 }

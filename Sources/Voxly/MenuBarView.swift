@@ -72,8 +72,7 @@ struct MenuBarView: View {
                     label: "Microphone",
                     granted: appState.micPermissionGranted,
                     action: {
-                        let pm = PermissionsManager()
-                        pm.openMicrophoneSettings()
+                        appState.permissionsManager.openMicrophoneSettings()
                     }
                 )
 
@@ -81,8 +80,7 @@ struct MenuBarView: View {
                     label: "Accessibility",
                     granted: appState.accessibilityGranted,
                     action: {
-                        let pm = PermissionsManager()
-                        pm.promptAccessibility()
+                        appState.requestAccessibility()
                     }
                 )
             }
