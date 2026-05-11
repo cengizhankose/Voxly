@@ -34,3 +34,10 @@ Resources/*.metallib
 # SPM
 .build/
 Package.resolved
+
+# Claude Code workspace state
+.claude/
+.claude-flow/
+.swarm/
+.mcp.json
+ruvector.db
