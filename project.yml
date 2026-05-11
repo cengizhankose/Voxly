@@ -17,7 +17,6 @@ targets:
     platform: macOS
     sources:
       - Sources/Voxly
-    resources:
       - Resources
     settings:
       base:
@@ -36,14 +35,24 @@ targets:
         OTHER_LDFLAGS:
           - "-lc++"
         HEADER_SEARCH_PATHS:
-          - "$(PROJECT_DIR)/Frameworks/whisper.xcframework/macos-arm64_x86_64/Headers"
+          - "$(PROJECT_DIR)/Frameworks/whisper.xcframework/macos-arm64/Headers"
         FRAMEWORK_SEARCH_PATHS:
           - "$(PROJECT_DIR)/Frameworks"
     dependencies:
       - package: KeyboardShortcuts
       - framework: Frameworks/whisper.xcframework
-        embed: true
+        embed: false
+      - sdk: Accelerate.framework
+      - sdk: Metal.framework
+      - sdk: MetalKit.framework
+      - sdk: Foundation.framework
     info:
       path: Support/Info.plist
+      properties:
+        LSUIElement: true
+        NSMicrophoneUsageDescription: "Voxly needs microphone access to transcribe your speech to text."
+        NSHumanReadableCopyright: "Copyright 2026 Voxly. All rights reserved."
     entitlements:
       path: Support/Voxly.entitlements
+      properties:
+        com.apple.security.device.audio-input: true

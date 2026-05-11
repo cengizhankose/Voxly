@@ -46,21 +46,20 @@ echo "=== Preparing library ==="
 mkdir -p output/lib output/include
 
 cp include/whisper.h output/include/
-[ -f ggml/include/ggml.h ] && cp ggml/include/ggml.h output/include/
+# Copy all ggml public headers — whisper.h transitively includes ggml-cpu.h, ggml-backend.h, etc.
+cp ggml/include/*.h output/include/
 
-# Find all static libs and merge into one
-LIBS=$(find build -name "*.a" -not -path "*/CMakeFiles/*" | sort)
+# Find all static libs and merge into one.
+# Use `libtool -static` (not `ar x` + `ar rcs`) so duplicate .o filenames across libs
+# (e.g. ggml-cpu/quants.c.o vs ggml-cpu/arch/arm/quants.c.o) don't clobber each other.
+LIB_LIST=()
+while IFS= read -r lib; do
+    LIB_LIST+=("$lib")
+done < <(find "$PWD/build" -name "*.a" -not -path "*/CMakeFiles/*" | sort)
 echo "Libraries found:"
-echo "$LIBS"
+printf '  %s\n' "${LIB_LIST[@]}"
 
-TEMP_OBJS="$BUILD_DIR/objs"
-mkdir -p "$TEMP_OBJS"
-cd "$TEMP_OBJS"
-for lib in $LIBS; do
-    ar x "$lib"
-done
-cd "$BUILD_DIR/whisper.cpp"
-ar rcs output/lib/libwhisper.a "$TEMP_OBJS"/*.o
+libtool -static -o output/lib/libwhisper.a "${LIB_LIST[@]}"
 
 # Create XCFramework
 echo "=== Creating XCFramework ==="
