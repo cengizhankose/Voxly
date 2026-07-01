@@ -38,6 +38,7 @@ final class AppState: ObservableObject {
         // Apply persisted settings BEFORE first model load.
         dictation.pasteMode = settings.pasteMode
         dictation.languageOverride = settings.languageOverride
+        dictation.audioRecorder.preferredDeviceUID = settings.selectedInputDeviceUID
         history.retentionDays = settings.historyRetentionDays
 
         Task {
@@ -84,6 +85,12 @@ final class AppState: ObservableObject {
         settings.$languageOverride
             .sink { [weak self] lang in
                 self?.dictation.languageOverride = lang
+            }
+            .store(in: &cancellables)
+
+        settings.$selectedInputDeviceUID
+            .sink { [weak self] uid in
+                self?.dictation.audioRecorder.preferredDeviceUID = uid
             }
             .store(in: &cancellables)
 

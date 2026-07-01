@@ -151,9 +151,27 @@ private struct ModelSettingsView: View {
 
 private struct AdvancedSettingsView: View {
     @EnvironmentObject var appState: AppState
+    @State private var inputDevices: [AudioInputDevice] = []
 
     var body: some View {
         Form {
+            Section {
+                Picker("Microphone", selection: Binding(
+                    get: { appState.settings.selectedInputDeviceUID },
+                    set: { appState.settings.selectedInputDeviceUID = $0 }
+                )) {
+                    Text("System Default").tag(AudioInputDevice.systemDefaultUID)
+                    ForEach(inputDevices) { device in
+                        Text(device.name).tag(device.id)
+                    }
+                }
+                Text("Applies to the next recording. \"System Default\" follows your macOS Sound settings.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } header: {
+                Text("Input")
+            }
+
             Section("Output") {
                 Picker("Paste mode", selection: Binding(
                     get: { appState.settings.pasteMode },
@@ -185,5 +203,6 @@ private struct AdvancedSettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .onAppear { inputDevices = AudioDeviceEnumerator.inputDevices() }
     }
 }

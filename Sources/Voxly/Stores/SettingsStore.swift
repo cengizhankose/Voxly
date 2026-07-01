@@ -14,6 +14,7 @@ final class SettingsStore: ObservableObject {
 
     private enum Key {
         static let selectedModelSize     = "selectedModelSize"
+        static let selectedInputDeviceUID = "selectedInputDeviceUID"
         static let pasteMode             = "pasteMode"
         static let languageOverride      = "languageOverride"
         static let launchAtLogin         = "launchAtLogin"
@@ -26,6 +27,11 @@ final class SettingsStore: ObservableObject {
 
     @Published var selectedModelSize: ModelSize {
         didSet { defaults.set(selectedModelSize.rawValue, forKey: Key.selectedModelSize) }
+    }
+
+    /// CoreAudio UID of the chosen microphone, or the system-default sentinel.
+    @Published var selectedInputDeviceUID: String {
+        didSet { defaults.set(selectedInputDeviceUID, forKey: Key.selectedInputDeviceUID) }
     }
 
     @Published var pasteMode: PasteMode {
@@ -60,6 +66,9 @@ final class SettingsStore: ObservableObject {
 
         let rawModel = defaults.string(forKey: Key.selectedModelSize) ?? ModelSize.base.rawValue
         self.selectedModelSize = ModelSize(rawValue: rawModel) ?? .base
+
+        self.selectedInputDeviceUID = defaults.string(forKey: Key.selectedInputDeviceUID)
+            ?? AudioInputDevice.systemDefaultUID
 
         let rawPaste = defaults.string(forKey: Key.pasteMode) ?? PasteMode.paste.rawValue
         self.pasteMode = PasteMode(rawValue: rawPaste) ?? .paste
