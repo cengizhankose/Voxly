@@ -16,6 +16,7 @@ build/
 
 # Build artifacts
 .build-whisper/
+dist/
 
 # XCFramework (built from source)
 Frameworks/whisper.xcframework/
