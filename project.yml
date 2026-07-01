@@ -24,6 +24,7 @@ targets:
         PRODUCT_NAME: Voxly
         MARKETING_VERSION: "1.0.0"
         CURRENT_PROJECT_VERSION: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         SWIFT_VERSION: "5.9"
         MACOSX_DEPLOYMENT_TARGET: "13.0"
         INFOPLIST_FILE: Support/Info.plist
