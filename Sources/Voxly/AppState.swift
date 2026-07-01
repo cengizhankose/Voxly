@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import Combine
 import KeyboardShortcuts
 import os
 
@@ -7,27 +8,104 @@ private let log = Logger(subsystem: "com.voxly.app", category: "AppState")
 
 @MainActor
 final class AppState: ObservableObject {
-    @Published var isRecording = false
-    @Published var isTranscribing = false
-    @Published var transcribedText = ""
-    @Published var statusMessage = "Ready"
+    // Permissions
     @Published var micPermissionGranted = false
     @Published var accessibilityGranted = false
+    /// True when user clicked Grant for Accessibility and ~8s of polling
+    /// elapsed without the state flipping — strong signal of a stale TCC
+    /// entry from a previous CDHash. Surfaces a "Reset & Re-grant" path.
+    @Published var accessibilityLikelyStale = false
 
-    private let audioRecorder = AudioRecorder()
-    private let whisperEngine = WhisperEngine()
-    private let textInserter = TextInserter()
+    // Sub-components
+    let dictation = DictationController()
+    let history = HistoryStore()
+    let settings = SettingsStore()
+    let downloader = ModelDownloader()
     let permissionsManager = PermissionsManager()
+
+    // MARK: convenience pass-throughs for existing call sites.
+    var isRecording: Bool { dictation.isRecording }
+    var isTranscribing: Bool { dictation.isTranscribing }
+    var statusMessage: String { dictation.statusMessage }
+    var transcribedText: String { dictation.lastTranscript }
+
     private var permissionPollTimer: Timer?
+    private var permissionPollStartedAt: Date?
+    private var cancellables = Set<AnyCancellable>()
+    private var distributedTCCObserver: NSObjectProtocol?
 
     init() {
+        // Apply persisted settings BEFORE first model load.
+        dictation.pasteMode = settings.pasteMode
+        dictation.languageOverride = settings.languageOverride
+        history.retentionDays = settings.historyRetentionDays
+
         Task {
-            await setupHotkey()
+            setupHotkey()
             await checkPermissions()
-            await loadModel()
+            await loadInitialModel()
         }
         observeAppActivation()
+        observeTCCChanges()
+        wireDictationToHistory()
+        wireSettingsToDictation()
     }
+
+    deinit {
+        if let token = distributedTCCObserver {
+            DistributedNotificationCenter.default().removeObserver(token)
+        }
+    }
+
+    private func wireDictationToHistory() {
+        dictation.onTranscript = { [weak self] text, duration, targetApp, language, modelName in
+            guard let self = self else { return }
+            let record = TranscriptionRecord(
+                text: text,
+                durationSeconds: duration,
+                language: language,
+                targetAppBundleId: targetApp?.bundleIdentifier,
+                targetAppName: targetApp?.localizedName,
+                modelName: modelName
+            )
+            self.history.append(record)
+        }
+    }
+
+    /// Bridge settings changes into the controller. Combine sinks fire on the
+    /// main actor since SettingsStore is `@MainActor`.
+    private func wireSettingsToDictation() {
+        settings.$pasteMode
+            .sink { [weak self] mode in
+                self?.dictation.pasteMode = mode
+            }
+            .store(in: &cancellables)
+
+        settings.$languageOverride
+            .sink { [weak self] lang in
+                self?.dictation.languageOverride = lang
+            }
+            .store(in: &cancellables)
+
+        settings.$historyRetentionDays
+            .sink { [weak self] days in
+                self?.history.retentionDays = days
+            }
+            .store(in: &cancellables)
+
+        // Model switching — skip first emission (initial value already applied at boot).
+        settings.$selectedModelSize
+            .dropFirst()
+            .sink { [weak self] size in
+                guard let self = self else { return }
+                Task { @MainActor in
+                    await self.applyModelChange(size)
+                }
+            }
+            .store(in: &cancellables)
+    }
+
+    // MARK: hotkey
 
     private func setupHotkey() {
         KeyboardShortcuts.onKeyDown(for: .toggleDictation) { [weak self] in
@@ -36,6 +114,15 @@ final class AppState: ObservableObject {
             }
         }
     }
+
+    func toggleDictation() {
+        dictation.toggle(
+            micGranted: micPermissionGranted,
+            accessibilityGranted: accessibilityGranted
+        )
+    }
+
+    // MARK: permissions
 
     func checkPermissions() async {
         micPermissionGranted = await permissionsManager.requestMicrophoneAccess()
@@ -46,8 +133,6 @@ final class AppState: ObservableObject {
         }
     }
 
-    /// Re-check Accessibility without prompting. Mic status is sticky after grant
-    /// (TCC reports it without prompt), so single call is fine.
     func refreshPermissions() {
         let prevAcc = accessibilityGranted
         let prevMic = micPermissionGranted
@@ -58,11 +143,40 @@ final class AppState: ObservableObject {
         }
     }
 
-    /// Open Accessibility settings, then poll for grant so UI updates without
-    /// requiring app focus change.
     func requestAccessibility() {
         permissionsManager.promptAccessibility()
+        // Also deep-link to Settings in case the prompt was suppressed (modern
+        // macOS frequently no-ops the legacy prompt when bundle id is already
+        // registered, even if the entry is stale).
+        permissionsManager.openAccessibilitySettings()
+        accessibilityLikelyStale = false
         startPermissionPolling()
+    }
+
+    /// Wipe Voxly's TCC entry then relaunch so a fresh grant binds to the
+    /// current CDHash. Required for ad-hoc-signed dev builds; harmless under
+    /// stable signing.
+    func resetAccessibilityAndRelaunch() {
+        log.info("Resetting Accessibility TCC entry and relaunching")
+        _ = permissionsManager.resetAccessibility()
+        permissionsManager.openAccessibilitySettings()
+        // Spawn a detached helper that waits for THIS process to exit, then
+        // reopens the bundle. Without this the app just quit and never came
+        // back. `open` coalesces to a single instance, so the sleep must
+        // outlast our own terminate delay below.
+        let bundlePath = Bundle.main.bundlePath
+        let relauncher = Process()
+        relauncher.launchPath = "/bin/sh"
+        relauncher.arguments = ["-c", "sleep 1.5; /usr/bin/open \"\(bundlePath)\""]
+        do {
+            try relauncher.run()
+        } catch {
+            log.error("Relaunch helper failed: \(error.localizedDescription, privacy: .public)")
+        }
+        // Give Settings + helper a moment to register, then terminate.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            NSApp.terminate(nil)
+        }
     }
 
     private func observeAppActivation() {
@@ -77,117 +191,73 @@ final class AppState: ObservableObject {
 
     private func startPermissionPolling() {
         permissionPollTimer?.invalidate()
-        permissionPollTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] timer in
+        permissionPollStartedAt = Date()
+
+        // Use .common run-loop mode so the timer keeps firing while sheets or
+        // menu-bar popovers run a modal session.
+        let timer = Timer(timeInterval: 1.0, repeats: true) { [weak self] timer in
             Task { @MainActor in
                 guard let self = self else { timer.invalidate(); return }
                 self.refreshPermissions()
                 if self.accessibilityGranted {
                     timer.invalidate()
                     self.permissionPollTimer = nil
+                    self.accessibilityLikelyStale = false
                     log.info("Stopped permission polling after grant")
+                    return
+                }
+                // After ~8s of polling without flipping, the entry is almost
+                // certainly stale (csreq mismatch). Surface the reset path.
+                if let started = self.permissionPollStartedAt,
+                   Date().timeIntervalSince(started) > 8,
+                   !self.accessibilityLikelyStale {
+                    self.accessibilityLikelyStale = true
+                    log.warning("Accessibility grant did not propagate in 8s — likely stale TCC entry")
                 }
             }
         }
-        // Auto-stop after 60s regardless to avoid leak
+        RunLoop.main.add(timer, forMode: .common)
+        permissionPollTimer = timer
+
         DispatchQueue.main.asyncAfter(deadline: .now() + 60) { [weak self] in
             self?.permissionPollTimer?.invalidate()
             self?.permissionPollTimer = nil
         }
     }
 
-    private func loadModel() async {
-        statusMessage = "Loading model..."
-        let modelPath = modelFilePath()
-        log.info("Model path resolved: \(modelPath, privacy: .public)")
-
-        guard FileManager.default.fileExists(atPath: modelPath) else {
-            log.error("Model file missing at: \(modelPath, privacy: .public)")
-            statusMessage = "Model not found. Run download script first."
-            return
+    /// Listen for TCC modifications so we can refresh state instantly when the
+    /// user toggles Voxly in System Settings. Stable, undocumented Apple notif.
+    private func observeTCCChanges() {
+        distributedTCCObserver = DistributedNotificationCenter.default().addObserver(
+            forName: NSNotification.Name("com.apple.TCC.access.changed"),
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.refreshPermissions() }
         }
-
-        let loaded = await whisperEngine.loadModel(path: modelPath)
-        log.info("Model loaded: \(loaded)")
-        statusMessage = loaded ? "Ready" : "Failed to load model"
     }
 
-    func toggleDictation() {
-        if isRecording {
-            stopRecording()
+    // MARK: model
+
+    private func loadInitialModel() async {
+        let size = settings.selectedModelSize
+        if let path = ModelLocator.path(for: size) {
+            await dictation.loadModel(at: path, name: size.rawValue)
+        } else if let fallbackPath = ModelLocator.path(for: .base) {
+            log.warning("Selected model \(size.rawValue, privacy: .public) unavailable, falling back to base")
+            await dictation.loadModel(at: fallbackPath, name: ModelSize.base.rawValue)
         } else {
-            startRecording()
+            log.error("No model files available on disk")
         }
     }
 
-    private func startRecording() {
-        guard micPermissionGranted else {
-            statusMessage = "Microphone access denied"
+    private func applyModelChange(_ size: ModelSize) async {
+        guard let path = ModelLocator.path(for: size) else {
+            log.error("Cannot switch to \(size.rawValue, privacy: .public): file missing")
+            // Revert the picker so UI matches reality.
+            settings.selectedModelSize = ModelSize(rawValue: dictation.currentModelName) ?? .base
             return
         }
-
-        // Capture the app that owns the focused text field BEFORE we touch
-        // the menu bar UI / popover, so paste can target it later.
-        textInserter.captureFrontmostApp()
-
-        do {
-            try audioRecorder.start()
-            isRecording = true
-            statusMessage = "Recording..."
-        } catch {
-            statusMessage = "Failed to start recording: \(error.localizedDescription)"
-        }
-    }
-
-    private func stopRecording() {
-        audioRecorder.stop()
-        isRecording = false
-        statusMessage = "Transcribing..."
-        isTranscribing = true
-        log.info("Recording stopped, starting transcription")
-
-        Task {
-            let audioData = audioRecorder.getAudioData()
-            log.info("Captured \(audioData.count) audio samples (~\(Double(audioData.count) / 16000.0, format: .fixed(precision: 2))s)")
-
-            guard !audioData.isEmpty else {
-                log.error("No audio data captured")
-                statusMessage = "No audio captured"
-                isTranscribing = false
-                return
-            }
-
-            let text = await whisperEngine.transcribe(audioData: audioData)
-            log.info("Transcription result: '\(text, privacy: .public)' (length: \(text.count))")
-
-            if text.isEmpty {
-                statusMessage = "No speech detected"
-            } else {
-                transcribedText = text
-                statusMessage = "Inserting text..."
-
-                if accessibilityGranted {
-                    log.info("Inserting text via Cmd+V")
-                    textInserter.insertText(text)
-                    statusMessage = "Done"
-                } else {
-                    log.warning("Accessibility not granted, clipboard only")
-                    statusMessage = "Text copied (enable Accessibility for auto-paste)"
-                    textInserter.copyToClipboard(text)
-                }
-            }
-            isTranscribing = false
-        }
-    }
-
-    private func modelFilePath() -> String {
-        // Check app bundle first
-        if let bundlePath = Bundle.main.path(forResource: "ggml-base", ofType: "bin") {
-            return bundlePath
-        }
-
-        // Check Application Support
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let voxlyDir = appSupport.appendingPathComponent("Voxly")
-        return voxlyDir.appendingPathComponent("ggml-base.bin").path
+        await dictation.reloadModel(at: path, name: size.rawValue)
     }
 }

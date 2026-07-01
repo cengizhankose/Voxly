@@ -7,9 +7,26 @@ extension KeyboardShortcuts.Name {
 
 @main
 struct VoxlyApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var appState = AppState()
 
     var body: some Scene {
+        Window("Voxly", id: "main") {
+            MainWindowView()
+                .environmentObject(appState)
+                .tint(Theme.accent)
+        }
+        .commands {
+            // Hide the default "New" item — Voxly has no document model.
+            CommandGroup(replacing: .newItem) { }
+        }
+
+        Settings {
+            SettingsView()
+                .environmentObject(appState)
+                .tint(Theme.accent)
+        }
+
         MenuBarExtra {
             MenuBarView()
                 .environmentObject(appState)
@@ -23,3 +40,4 @@ struct VoxlyApp: App {
         .menuBarExtraStyle(.window)
     }
 }
+

@@ -3,129 +3,117 @@ import KeyboardShortcuts
 
 struct MenuBarView: View {
     @EnvironmentObject var appState: AppState
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Header
-            HStack {
-                Image(systemName: appState.isRecording ? "mic.fill" : "mic")
-                    .foregroundColor(appState.isRecording ? .red : .primary)
-                    .font(.title2)
-                Text("Voxly")
-                    .font(.headline)
+        VStack(alignment: .leading, spacing: 14) {
+            header
+            recordButton
+            statusArea
+            if !appState.transcribedText.isEmpty { lastTranscript }
+            ThinDivider()
+            PermissionsSectionView()
+            ThinDivider()
+            hotkeyRow
+            ThinDivider()
+            footer
+        }
+        .padding(16)
+        .frame(width: 320)
+        .background(Theme.bg)
+        .foregroundColor(Theme.text)
+        .tint(Theme.accent)
+    }
+
+    private var header: some View {
+        HStack(spacing: 9) {
+            BrandMark(size: 22)
+            Text("Voxly")
+                .font(Theme.display(16, .bold))
+                .tracking(-0.3)
+                .foregroundColor(Theme.text)
+            Spacer()
+            Text(appState.statusMessage)
+                .font(Theme.mono(11))
+                .foregroundColor(Theme.muted)
+                .lineLimit(1)
+                .truncationMode(.tail)
+        }
+    }
+
+    private var recordButton: some View {
+        Button(action: { appState.toggleDictation() }) {
+            HStack(spacing: 8) {
+                Image(systemName: appState.isRecording ? "stop.fill" : "mic.fill")
+                    .font(.system(size: 13, weight: .bold))
+                Text(appState.isRecording ? "Stop recording" : "Start recording")
                 Spacer()
-                Text(appState.statusMessage)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-
-            Divider()
-
-            // Recording button
-            Button(action: { appState.toggleDictation() }) {
-                HStack {
-                    Image(systemName: appState.isRecording ? "stop.circle.fill" : "record.circle")
-                        .foregroundColor(appState.isRecording ? .red : .accentColor)
-                    Text(appState.isRecording ? "Stop Recording" : "Start Recording")
-                    Spacer()
-                    Text("Option+D")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-            }
-            .buttonStyle(.plain)
-            .disabled(appState.isTranscribing)
-
-            if appState.isTranscribing {
-                HStack {
-                    ProgressView()
-                        .scaleEffect(0.7)
-                    Text("Transcribing...")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-            }
-
-            // Last transcription
-            if !appState.transcribedText.isEmpty {
-                Divider()
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Last transcription:")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    Text(appState.transcribedText)
-                        .font(.body)
-                        .textSelection(.enabled)
-                        .lineLimit(5)
-                }
-            }
-
-            Divider()
-
-            // Permissions
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Permissions")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-
-                PermissionRow(
-                    label: "Microphone",
-                    granted: appState.micPermissionGranted,
-                    action: {
-                        appState.permissionsManager.openMicrophoneSettings()
-                    }
-                )
-
-                PermissionRow(
-                    label: "Accessibility",
-                    granted: appState.accessibilityGranted,
-                    action: {
-                        appState.requestAccessibility()
-                    }
-                )
-            }
-
-            Divider()
-
-            // Hotkey setting
-            HStack {
-                Text("Hotkey:")
-                    .font(.caption)
-                Spacer()
-                KeyboardShortcuts.Recorder(for: .toggleDictation)
-                    .frame(maxWidth: 150)
-            }
-
-            Divider()
-
-            Button("Quit Voxly") {
-                NSApplication.shared.terminate(nil)
+                Text("⌥D")
+                    .font(Theme.mono(12, .semibold))
+                    .opacity(0.85)
             }
         }
-        .padding()
-        .frame(width: 300)
+        .buttonStyle(PrimaryButtonStyle())
+        .disabled(appState.isTranscribing)
     }
-}
 
-struct PermissionRow: View {
-    let label: String
-    let granted: Bool
-    let action: () -> Void
-
-    var body: some View {
-        HStack {
-            Image(systemName: granted ? "checkmark.circle.fill" : "xmark.circle.fill")
-                .foregroundColor(granted ? .green : .red)
-                .font(.caption)
-            Text(label)
-                .font(.caption)
-            Spacer()
-            if !granted {
-                Button("Grant") { action() }
-                    .font(.caption)
-                    .buttonStyle(.bordered)
-                    .controlSize(.mini)
+    @ViewBuilder
+    private var statusArea: some View {
+        if appState.isRecording {
+            RecordingChip()
+        } else if appState.isTranscribing {
+            HStack(spacing: 8) {
+                ProgressView()
+                    .scaleEffect(0.6)
+                    .frame(width: 14, height: 14)
+                Text("Transcribing…")
+                    .font(Theme.mono(12))
+                    .foregroundColor(Theme.muted)
             }
+        }
+    }
+
+    private var lastTranscript: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Last").kickerStyle()
+            Text(appState.transcribedText)
+                .font(.system(size: 13))
+                .foregroundColor(Theme.text)
+                .textSelection(.enabled)
+                .lineLimit(5)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .voxlyCard(padding: 12)
+    }
+
+    private var hotkeyRow: some View {
+        HStack {
+            Text("Hotkey")
+                .font(Theme.mono(11))
+                .foregroundColor(Theme.muted)
+            Spacer()
+            KeyboardShortcuts.Recorder(for: .toggleDictation)
+                .frame(maxWidth: 160)
+        }
+    }
+
+    private var footer: some View {
+        HStack(spacing: 8) {
+            Button {
+                NSApp.activate(ignoringOtherApps: true)
+                openWindow(id: "main")
+            } label: {
+                Text("Open Voxly").frame(maxWidth: .infinity)
+            }
+            .buttonStyle(GhostButtonStyle(compact: true))
+
+            Button {
+                NSApplication.shared.terminate(nil)
+            } label: {
+                Text("Quit").frame(maxWidth: .infinity)
+            }
+            .buttonStyle(GhostButtonStyle(compact: true))
         }
     }
 }

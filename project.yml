@@ -50,7 +50,6 @@ targets:
     info:
       path: Support/Info.plist
       properties:
-        LSUIElement: true
         NSMicrophoneUsageDescription: "Voxly needs microphone access to transcribe your speech to text."
         NSHumanReadableCopyright: "Copyright 2026 Voxly. All rights reserved."
     entitlements:
