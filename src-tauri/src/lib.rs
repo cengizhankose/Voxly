@@ -15,7 +15,7 @@ use std::time::Duration;
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Manager, WindowEvent,
+    ActivationPolicy, AppHandle, Manager, WindowEvent,
 };
 use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
@@ -40,6 +40,9 @@ pub fn set_launch_at_login(app: &AppHandle, enabled: bool) -> Result<(), String>
 }
 
 fn show_main_window(app: &AppHandle) {
+    // Become a regular app (dock icon + focusable window) whenever a window is
+    // shown; we drop back to accessory (menu-bar only) when it's hidden.
+    let _ = app.set_activation_policy(ActivationPolicy::Regular);
     if let Some(win) = app.get_webview_window("main") {
         let _ = win.show();
         let _ = win.unminimize();
@@ -155,6 +158,7 @@ pub fn run() {
                     let _ = win.set_focus();
                 } else {
                     let _ = win.hide();
+                    app.set_activation_policy(ActivationPolicy::Accessory);
                 }
             }
 
@@ -167,6 +171,10 @@ pub fn run() {
                 if window.label() == "main" {
                     api.prevent_close();
                     let _ = window.hide();
+                    // Hidden → menu-bar only (drop the dock icon).
+                    let _ = window
+                        .app_handle()
+                        .set_activation_policy(ActivationPolicy::Accessory);
                 }
             }
         })
