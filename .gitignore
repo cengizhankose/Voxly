@@ -18,6 +18,13 @@ build/
 .build-whisper/
 dist/
 
+# Tauri / Node
+node_modules/
+src-tauri/target/
+src-tauri/gen/
+src-tauri/icons/
+*.tsbuildinfo
+
 # XCFramework (built from source)
 Frameworks/whisper.xcframework/
 
