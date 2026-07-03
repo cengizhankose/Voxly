@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Voxly: Local dictation for macOS</title>
+  <meta name="description" content="Press Option+D, talk, and Voxly drops the transcript straight into whatever app has focus. Every word stays on your Mac. On-device speech-to-text via whisper.cpp." />
+  <meta name="theme-color" content="#FCFCFD" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#08080A" media="(prefers-color-scheme: dark)" />
+  <link rel="canonical" href="https://cengizhankose.github.io/Voxly/" />
+  <link rel="icon" type="image/png" href="./favicon.png" />
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Voxly: Local dictation for macOS" />
+  <meta property="og:description" content="Press Option+D, talk, and Voxly pastes the transcript into the focused app. Every word stays on your Mac." />
+  <meta property="og:url" content="https://cengizhankose.github.io/Voxly/" />
+  <meta property="og:image" content="./og-image.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Voxly: Local dictation for macOS" />
+  <meta name="twitter:description" content="Press Option+D, talk, and Voxly pastes the transcript into the focused app. Every word stays on your Mac." />
+  <meta name="twitter:image" content="./og-image.png" />
+
+  <link rel="stylesheet" href="./styles.css" />
+
+  <!-- FOUC guard: apply persisted theme before first paint -->
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("voxly-signal-theme");
+        if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    })();
+  </script>
+</head>
+<body>
+  <!-- ============================ NAV ============================ -->
+  <header class="nav">
+    <div class="container nav__row">
+      <a class="brand" href="#top" aria-label="Voxly home">
+        <svg class="brand__mark" viewBox="0 0 26 26" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+          <rect width="26" height="26" rx="7" fill="#E11D54" />
+          <g fill="#FFFFFF">
+            <rect x="7"  y="10" width="2.4" height="6"  rx="1.2" />
+            <rect x="11.8" y="6"  width="2.4" height="14" rx="1.2" />
+            <rect x="16.6" y="9"  width="2.4" height="8"  rx="1.2" />
+          </g>
+        </svg>
+        <span>Voxly</span>
+      </a>
+
+      <div class="nav__right">
+        <nav class="nav__links" aria-label="Primary">
+          <a class="link link--underline" href="#features">Features</a>
+          <a class="link link--underline" href="#privacy">Privacy</a>
+        </nav>
+        <div class="seg" role="group" aria-label="Color theme">
+          <button type="button" data-theme-set="light" aria-pressed="false">Light</button>
+          <button type="button" data-theme-set="auto" aria-pressed="true">Auto</button>
+          <button type="button" data-theme-set="dark" aria-pressed="false">Dark</button>
+        </div>
+        <a class="btn btn--primary btn--sm" href="https://github.com/cengizhankose/Voxly/releases/latest" rel="noopener noreferrer">Download for macOS</a>
+      </div>
+    </div>
+  </header>
+
+  <main id="top">
+    <!-- ============================ HERO ============================ -->
+    <section class="hero">
+      <div class="hero__radial" aria-hidden="true"></div>
+      <div class="container hero__inner">
+        <p class="eyebrow">On device · no cloud</p>
+        <h1>Dictate anywhere, <em>instantly.</em></h1>
+        <p class="hero__sub">Press Option+D, talk, and Voxly drops the transcript straight into whatever app has focus. Every word stays on your Mac.</p>
+        <div class="hero__cta">
+          <a class="btn btn--primary" href="https://github.com/cengizhankose/Voxly/releases/latest" rel="noopener noreferrer">Download for macOS</a>
+          <a class="btn btn--ghost" href="https://github.com/cengizhankose/Voxly" rel="noopener noreferrer">View source</a>
+        </div>
+
+        <div class="chip" role="img" aria-label="Voxly recording indicator">
+          <span class="chip__dot" aria-hidden="true"></span>
+          <span class="chip__txt">Recording</span>
+          <span class="chip__wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+          <span class="chip__keys" aria-hidden="true"><kbd>⌥</kbd><kbd>D</kbd></span>
+        </div>
+
+        <p class="hero__detail mono">whisper.cpp · 16kHz · 100% local</p>
+      </div>
+    </section>
+
+    <!-- ============================ FEATURES ============================ -->
+    <section class="section" id="features">
+      <div class="container">
+        <div class="section__head reveal">
+          <h2 class="section__title">Built to stay out of the way.</h2>
+          <p class="section__sub">A menu bar tool that records, transcribes, and pastes. No window to manage, no account to create.</p>
+        </div>
+
+        <div class="grid-2">
+          <article class="card reveal" data-reveal-index="0">
+            <span class="card__icon" aria-hidden="true"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M56,96v64a8,8,0,0,1-16,0V96a8,8,0,0,1,16,0ZM88,24a8,8,0,0,0-8,8V224a8,8,0,0,0,16,0V32A8,8,0,0,0,88,24Zm40,32a8,8,0,0,0-8,8V192a8,8,0,0,0,16,0V64A8,8,0,0,0,128,56Zm40,32a8,8,0,0,0-8,8v64a8,8,0,0,0,16,0V96A8,8,0,0,0,168,88Zm40-16a8,8,0,0,0-8,8v96a8,8,0,0,0,16,0V80A8,8,0,0,0,208,72Z"/></svg></span>
+            <h3>On-device transcription</h3>
+            <p>whisper.cpp runs the model locally on your Mac. Your audio is never uploaded, streamed, or stored off device.</p>
+            <p class="card__meta">whisper.cpp v1.8.1</p>
+          </article>
+
+          <article class="card reveal" data-reveal-index="1">
+            <span class="card__icon" aria-hidden="true"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M224,48H32A16,16,0,0,0,16,64V192a16,16,0,0,0,16,16H224a16,16,0,0,0,16-16V64A16,16,0,0,0,224,48Zm0,144H32V64H224V192Zm-16-64a8,8,0,0,1-8,8H56a8,8,0,0,1,0-16H200A8,8,0,0,1,208,128Zm0-32a8,8,0,0,1-8,8H56a8,8,0,0,1,0-16H200A8,8,0,0,1,208,96ZM72,160a8,8,0,0,1-8,8H56a8,8,0,0,1,0-16h8A8,8,0,0,1,72,160Zm96,0a8,8,0,0,1-8,8H96a8,8,0,0,1,0-16h64A8,8,0,0,1,168,160Zm40,0a8,8,0,0,1-8,8h-8a8,8,0,0,1,0-16h8A8,8,0,0,1,208,160Z"/></svg></span>
+            <h3>Global hotkey</h3>
+            <p>Press Option+D from any app to start and stop. Rebind it to whatever fits your muscle memory.</p>
+            <p class="card__meta">⌥D · rebindable</p>
+          </article>
+
+          <article class="card reveal" data-reveal-index="2">
+            <span class="card__icon" aria-hidden="true"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M168,152a8,8,0,0,1-8,8H96a8,8,0,0,1,0-16h64A8,8,0,0,1,168,152Zm-8-40H96a8,8,0,0,0,0,16h64a8,8,0,0,0,0-16Zm56-64V216a16,16,0,0,1-16,16H56a16,16,0,0,1-16-16V48A16,16,0,0,1,56,32H92.26a47.92,47.92,0,0,1,71.48,0H200A16,16,0,0,1,216,48ZM96,64h64a32,32,0,0,0-64,0ZM200,48H173.25A47.93,47.93,0,0,1,176,64v8a8,8,0,0,1-8,8H88a8,8,0,0,1-8-8V64a47.93,47.93,0,0,1,2.75-16H56V216H200Z"/></svg></span>
+            <h3>Auto-paste</h3>
+            <p>The transcript lands in the focused app through a synthesized Command+V, so text shows up where your cursor already is.</p>
+            <p class="card__meta">clipboard-safe</p>
+          </article>
+
+          <article class="card reveal" data-reveal-index="3">
+            <span class="card__icon" aria-hidden="true"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M215.79,118.17a8,8,0,0,0-5-5.66L153.18,90.9l14.66-73.33a8,8,0,0,0-13.69-7l-112,120a8,8,0,0,0,3,13l57.63,21.61L88.16,238.43a8,8,0,0,0,13.69,7l112-120A8,8,0,0,0,215.79,118.17ZM109.37,214l10.47-52.38a8,8,0,0,0-5-9.06L62,132.71l84.62-90.66L136.16,94.43a8,8,0,0,0,5,9.06l52.8,19.8Z"/></svg></span>
+            <h3>Metal acceleration</h3>
+            <p>Inference runs on the Apple GPU through Metal kernels, so transcription keeps pace on Apple Silicon.</p>
+            <p class="card__meta">Apple Silicon</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================ PRIVACY BAND ============================ -->
+    <section class="band" id="privacy">
+      <div class="container band__inner reveal">
+        <h2 class="band__title">Your voice never leaves <em>this Mac.</em></h2>
+        <p class="band__body">There is no account, no telemetry, and no cloud round-trip. The model loads from disk, the audio stays in memory, and the transcript goes straight to your clipboard. Nothing to trust but the source.</p>
+        <p class="band__detail mono">100% local · no network calls · open source</p>
+      </div>
+    </section>
+
+    <!-- ============================ CTA BAND ============================ -->
+    <section class="section cta-band">
+      <div class="container cta-band__inner reveal">
+        <h2 class="cta-band__title">Talk. It types.</h2>
+        <div class="cta-band__actions">
+          <a class="btn btn--primary" href="https://github.com/cengizhankose/Voxly/releases/latest" rel="noopener noreferrer">Download for macOS</a>
+        </div>
+        <p class="cta-band__note mono">macOS 13+ · Apple Silicon</p>
+      </div>
+    </section>
+  </main>
+
+  <!-- ============================ FOOTER ============================ -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer__row">
+        <span class="footer__brand">© 2026 Voxly · MIT License</span>
+        <nav class="footer__links" aria-label="Footer">
+          <a class="link link--underline" href="https://github.com/cengizhankose/Voxly" rel="noopener noreferrer">GitHub</a>
+          <a class="link link--underline" href="https://github.com/ggerganov/whisper.cpp" rel="noopener noreferrer">whisper.cpp</a>
+          <a class="link link--underline" href="https://github.com/cengizhankose/Voxly/issues" rel="noopener noreferrer">Report an issue</a>
+        </nav>
+      </div>
+      <p class="footer__note">All transcription happens on-device. Your audio never leaves this Mac.</p>
+    </div>
+  </footer>
+
+  <script src="./main.js" defer></script>
+</body>
+</html>
