@@ -50,6 +50,26 @@ final class AppState: ObservableObject {
         observeTCCChanges()
         wireDictationToHistory()
         wireSettingsToDictation()
+        forwardChildChanges()
+    }
+
+    /// Re-emit child ObservableObjects' change notifications through AppState.
+    /// Views observe only `appState` (the single `@EnvironmentObject`), so
+    /// without this bridge a change to `settings`, `downloader`, `dictation` or
+    /// `history` fires that child's `objectWillChange` but never AppState's —
+    /// leaving the UI stale until an unrelated redraw. Forwarding makes nested
+    /// store mutations (model selection, download progress, ...) reactive.
+    private func forwardChildChanges() {
+        for publisher in [
+            dictation.objectWillChange,
+            settings.objectWillChange,
+            downloader.objectWillChange,
+            history.objectWillChange
+        ] {
+            publisher
+                .sink { [weak self] _ in self?.objectWillChange.send() }
+                .store(in: &cancellables)
+        }
     }
 
     deinit {
