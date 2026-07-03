@@ -1,0 +1,223 @@
+/* Voxly "Signal" design tokens — ported 1:1 from the native SwiftUI Theme.
+   Light/dark resolved via prefers-color-scheme. */
+
+:root {
+  /* Surfaces (light) */
+  --bg: #fcfcfd;
+  --surface: #ffffff;
+  --surface-2: #f4f5f7;
+  --border: #e6e8eb;
+  --border-strong: #d5d8dd;
+  --text: #0a0a0b;
+  --muted: #6b7075;
+
+  /* Accent (brand rose) */
+  --accent: #e11d54;
+  --accent-ink: #ffffff;
+  --accent-text: #be123c;
+  --accent-soft: rgba(225, 29, 84, 0.08);
+
+  /* Status */
+  --positive: #0f7a52;
+  --warning: #b45309;
+
+  /* Metrics */
+  --radius: 6px;
+  --radius-lg: 12px;
+
+  /* Fonts */
+  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif;
+  --font-body: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  --font-mono: "SF Mono", ui-monospace, "Geist Mono", Menlo, monospace;
+
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #08080a;
+    --surface: #131318;
+    --surface-2: #1c1c23;
+    --border: #2c2c35;
+    --border-strong: #3a3a45;
+    --text: #f7f7f9;
+    --muted: #9a9aa4;
+    --accent-text: #ff5c86;
+    --accent-soft: rgba(255, 92, 134, 0.12);
+    --positive: #37d399;
+    --warning: #f5b454;
+  }
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-body);
+  font-size: 13.5px;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  user-select: none;
+  cursor: default;
+  overflow: hidden;
+}
+
+button {
+  font-family: inherit;
+  cursor: default;
+}
+
+/* ---- Typography utilities ---- */
+.display {
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--text);
+}
+.kicker {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.mono {
+  font-family: var(--font-mono);
+}
+.muted {
+  color: var(--muted);
+}
+
+/* ---- Surface card ---- */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+}
+
+/* ---- Buttons ---- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 14px;
+  border-radius: var(--radius);
+  border: 1px solid transparent;
+  font-size: 13px;
+  font-weight: 500;
+  transition: background 0.12s ease, border-color 0.12s ease, opacity 0.12s ease;
+}
+.btn:disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+.btn-primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.btn-primary:hover {
+  background: #c81a4b;
+}
+.btn-ghost {
+  background: transparent;
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+.btn-ghost:hover {
+  background: var(--surface-2);
+}
+.btn-compact {
+  height: 24px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+.btn-danger {
+  background: transparent;
+  color: var(--warning);
+  border-color: transparent;
+}
+.btn-danger:hover {
+  background: var(--accent-soft);
+}
+
+/* ---- Badge ---- */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  background: var(--surface-2);
+  color: var(--muted);
+}
+.badge-accent {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+.badge-dot::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* ---- Form controls ---- */
+select,
+input[type="text"] {
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  height: 28px;
+  padding: 0 8px;
+}
+input[type="text"] {
+  user-select: text;
+}
+
+/* ---- Progress ---- */
+.progress {
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.progress > div {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.15s ease;
+}
+
+/* ---- Scrollbars ---- */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
