@@ -71,7 +71,7 @@ struct MainWindowView: View {
             EmptyStateView(
                 systemImage: "gearshape",
                 title: "Settings",
-                subtitle: "Hotkey, permissions, model, and output options are in the pane to the right."
+                subtitle: "Hotkey, permissions, and output options are in the pane to the right."
             )
         case .about:
             EmptyStateView(

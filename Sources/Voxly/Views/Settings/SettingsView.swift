@@ -25,9 +25,6 @@ struct SettingsContent: View {
             PermissionsSettingsView()
                 .tabItem { Label("Permissions", systemImage: "lock.shield") }
 
-            ModelSettingsView()
-                .tabItem { Label("Model", systemImage: "cube.box") }
-
             AdvancedSettingsView()
                 .tabItem { Label("Advanced", systemImage: "slider.horizontal.3") }
         }
@@ -136,14 +133,6 @@ private struct GeneralSettingsView: View {
         } message: {
             Text("System Settings will open on the Accessibility pane. Re-add Voxly there, then relaunch the app.")
         }
-    }
-}
-
-// MARK: Model
-
-private struct ModelSettingsView: View {
-    var body: some View {
-        ModelManagementView()
     }
 }
 
