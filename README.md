@@ -4,6 +4,8 @@ A macOS menu bar dictation app powered by [whisper.cpp](https://github.com/ggerg
 
 Press **Option+D** to toggle recording. Transcribed text is automatically pasted into the active application.
 
+**Website:** [cengizhankose.github.io/Voxly](https://cengizhankose.github.io/Voxly/)
+
 ## Features
 
 - **Local processing** — all transcription runs on-device via whisper.cpp, no cloud API
