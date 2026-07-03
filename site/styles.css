@@ -78,17 +78,13 @@ body {
   -webkit-font-smoothing:antialiased;
   text-rendering:optimizeLegibility;
 }
-/* theme color transition - only after first paint (class added by JS) */
-html.theme-anim body,
-html.theme-anim .nav,
-html.theme-anim .card,
-html.theme-anim .band,
-html.theme-anim .chip,
-html.theme-anim .seg,
-html.theme-anim .btn--ghost {
-  transition: background-color var(--dur-theme) var(--ease),
-              color var(--dur-theme) var(--ease),
-              border-color var(--dur-theme) var(--ease);
+/* Theme swap crossfade via the View Transitions API (see main.js). A single
+   GPU-composited fade of the whole page — no per-element color transitions,
+   so switching stays smooth even with the nav's backdrop blur. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration:var(--dur-theme);
+  animation-timing-function:var(--ease);
 }
 
 a { color:inherit; text-decoration:none; }
@@ -344,7 +340,8 @@ img { max-width:100%; display:block; }
   .reveal { opacity:1; transform:none; transition:none; }
   .reveal[data-reveal-index] { transition-delay:0s; }
   .btn, .card, .link, .seg button { transition:none; }
-  html.theme-anim body, html.theme-anim .nav, html.theme-anim .card,
-  html.theme-anim .band, html.theme-anim .chip, html.theme-anim .seg,
-  html.theme-anim .btn--ghost { transition:none; }
+  /* View Transitions theme crossfade is skipped in JS under reduced motion;
+     also neutralize the pseudo-animation as a belt-and-braces guard. */
+  ::view-transition-old(root),
+  ::view-transition-new(root) { animation:none; }
 }

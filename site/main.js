@@ -19,6 +19,10 @@
     }
   }
 
+  var reduceMotion =
+    window.matchMedia &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
   function apply(choice) {
     if (choice === "auto") {
       root.removeAttribute("data-theme");
@@ -31,6 +35,20 @@
     });
   }
 
+  /* Swap theme. When available, crossfade through the View Transitions API:
+     a single GPU-composited fade of the whole page, instead of animating
+     background-color/color on dozens of elements every frame (which stutters,
+     especially with the nav's backdrop blur). Falls back to an instant swap. */
+  function setTheme(choice) {
+    if (document.startViewTransition && !reduceMotion) {
+      document.startViewTransition(function () {
+        apply(choice);
+      });
+    } else {
+      apply(choice);
+    }
+  }
+
   apply(currentChoice());
 
   segButtons.forEach(function (btn) {
@@ -40,15 +58,7 @@
         if (choice === "auto") localStorage.removeItem(STORAGE_KEY);
         else localStorage.setItem(STORAGE_KEY, choice);
       } catch (e) {}
-      apply(choice);
-    });
-  });
-
-  /* Enable the 350ms color transition only after first paint, so toggling
-     animates but the initial load does not flash. */
-  requestAnimationFrame(function () {
-    requestAnimationFrame(function () {
-      root.classList.add("theme-anim");
+      setTheme(choice);
     });
   });
 
