@@ -48,6 +48,7 @@ impl WhisperEngine {
         }
     }
 
+    #[allow(dead_code)]
     pub fn unload(&self) {
         *self.ctx.lock() = None;
     }

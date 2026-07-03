@@ -50,7 +50,9 @@ impl AudioRecorder {
 
         std::thread::spawn(move || {
             let host = cpal::default_host();
-            let mut stream: Option<cpal::Stream> = None;
+            // The stream is `!Send`; this binding owns it to keep capture alive.
+            // Reassigning to `None` on Stop drops it, which stops capture.
+            let mut held_stream: Option<cpal::Stream> = None;
             while let Ok(cmd) = cmd_rx.recv() {
                 match cmd {
                     Cmd::Start(reply) => {
@@ -61,7 +63,7 @@ impl AudioRecorder {
                                     let _ = reply.send(Err(format!("stream play failed: {e}")));
                                     continue;
                                 }
-                                stream = Some(s);
+                                held_stream = Some(s);
                                 thread_shared.recording.store(true, Ordering::SeqCst);
                                 let _ = reply.send(Ok(()));
                             }
@@ -72,10 +74,11 @@ impl AudioRecorder {
                     }
                     Cmd::Stop => {
                         thread_shared.recording.store(false, Ordering::SeqCst);
-                        stream = None; // dropping the stream stops capture
+                        held_stream = None; // dropping the stream stops capture
                     }
                 }
             }
+            drop(held_stream);
         });
 
         AudioRecorder { cmd_tx, shared }
@@ -85,6 +88,7 @@ impl AudioRecorder {
         *self.shared.preferred.lock() = uid.filter(|u| u != crate::storage::SYSTEM_DEFAULT_MIC);
     }
 
+    #[allow(dead_code)]
     pub fn is_recording(&self) -> bool {
         self.shared.recording.load(Ordering::SeqCst)
     }

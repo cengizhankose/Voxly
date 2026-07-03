@@ -20,7 +20,7 @@ pub struct TargetApp {
 /// taken focus). Best-effort; returns None off macOS or on failure.
 pub fn frontmost_app() -> Option<TargetApp> {
     #[cfg(target_os = "macos")]
-    unsafe {
+    {
         use objc2_app_kit::NSWorkspace;
         let workspace = NSWorkspace::sharedWorkspace();
         let app = workspace.frontmostApplication()?;
@@ -48,7 +48,9 @@ fn our_pid() -> i32 {
 unsafe fn activate_pid(pid: i32) -> bool {
     use objc2_app_kit::{NSApplicationActivationOptions, NSRunningApplication};
     if let Some(app) = NSRunningApplication::runningApplicationWithProcessIdentifier(pid) {
-        app.activateWithOptions(NSApplicationActivationOptions::ActivateIgnoringOtherApps)
+        // ActivateIgnoringOtherApps is deprecated on macOS 14; AllWindows brings
+        // the target forward for the synthesized paste without the warning.
+        app.activateWithOptions(NSApplicationActivationOptions::ActivateAllWindows)
     } else {
         false
     }
