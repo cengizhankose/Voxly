@@ -138,23 +138,26 @@ img { max-width:100%; display:block; }
 }
 
 /* ============================================================
-   Segmented theme toggle (§6.6)
+   Theme icon button (dark/light toggle)
    ============================================================ */
-.seg {
-  display:inline-flex; padding:3px; gap:2px;
-  background:var(--surface-2); border-radius:var(--radius-pill);
-  border:1px solid var(--border);
+.theme-btn {
+  width:38px; height:38px; flex:none;
+  display:inline-flex; align-items:center; justify-content:center;
+  background:transparent; color:var(--text);
+  border:1px solid var(--border-strong); border-radius:var(--radius);
+  cursor:pointer;
+  transition: background-color var(--dur-state) var(--ease),
+              color var(--dur-state) var(--ease),
+              border-color var(--dur-state) var(--ease),
+              transform var(--dur-tactile) var(--ease);
 }
-.seg button {
-  font-family:var(--font); font-size:12.5px; font-weight:500;
-  color:var(--muted); background:transparent; border:none; cursor:pointer;
-  padding:6px 12px; min-height:30px; border-radius:var(--radius-pill);
-  transition:color var(--dur-state) var(--ease), background-color var(--dur-state) var(--ease);
-}
-.seg button:hover { color:var(--text); }
-.seg button[aria-pressed="true"] {
-  color:var(--text); background:var(--surface); box-shadow:var(--shadow-sm);
-}
+.theme-btn:hover { background:var(--surface-2); }
+.theme-btn:active { transform:translateY(1px); }
+.theme-btn svg { width:18px; height:18px; display:block; }
+.theme-btn__sun, .theme-btn__moon { display:none; line-height:0; }
+/* Show the icon for the action: sun while dark (go light), moon while light (go dark). */
+.theme-btn[data-effective="dark"] .theme-btn__sun { display:block; }
+.theme-btn[data-effective="light"] .theme-btn__moon { display:block; }
 
 /* ============================================================
    Navigation (§6.5)
@@ -339,7 +342,7 @@ img { max-width:100%; display:block; }
   .hero__inner > * { animation:none; }
   .reveal { opacity:1; transform:none; transition:none; }
   .reveal[data-reveal-index] { transition-delay:0s; }
-  .btn, .card, .link, .seg button { transition:none; }
+  .btn, .card, .link, .theme-btn { transition:none; }
   /* View Transitions theme crossfade is skipped in JS under reduced motion;
      also neutralize the pseudo-animation as a belt-and-braces guard. */
   ::view-transition-old(root),

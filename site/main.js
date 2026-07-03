@@ -2,43 +2,40 @@
 (function () {
   "use strict";
 
-  var STORAGE_KEY = "voxly-signal-theme";
   var root = document.documentElement;
 
-  /* ---------------- Theme (Light / Auto / Dark) ---------------- */
-  var segButtons = Array.prototype.slice.call(
-    document.querySelectorAll("[data-theme-set]")
-  );
-
-  function currentChoice() {
-    try {
-      var t = localStorage.getItem(STORAGE_KEY);
-      return t === "light" || t === "dark" ? t : "auto";
-    } catch (e) {
-      return "auto";
-    }
-  }
-
+  /* ---------------- Theme (icon-button dark/light toggle) ----------------
+     Defaults to Auto (no data-theme -> follows the OS via prefers-color-scheme).
+     The button flips between light and dark; the choice is intentionally NOT
+     persisted, so a refresh returns to Auto. */
+  var themeBtn = document.querySelector(".theme-btn");
+  var darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
   var reduceMotion =
     window.matchMedia &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  function apply(choice) {
-    if (choice === "auto") {
-      root.removeAttribute("data-theme");
-    } else {
-      root.setAttribute("data-theme", choice);
-    }
-    segButtons.forEach(function (btn) {
-      var pressed = btn.getAttribute("data-theme-set") === choice;
-      btn.setAttribute("aria-pressed", pressed ? "true" : "false");
-    });
+  /* Resolved theme actually on screen right now: manual override if set,
+     otherwise whatever the OS prefers. */
+  function effectiveTheme() {
+    var attr = root.getAttribute("data-theme");
+    if (attr === "light" || attr === "dark") return attr;
+    return darkQuery.matches ? "dark" : "light";
   }
 
-  /* Swap theme. When available, crossfade through the View Transitions API:
-     a single GPU-composited fade of the whole page, instead of animating
-     background-color/color on dozens of elements every frame (which stutters,
-     especially with the nav's backdrop blur). Falls back to an instant swap. */
+  /* Mirror the effective theme onto the button so CSS shows the right icon
+     (sun while dark -> click for light, moon while light -> click for dark). */
+  function reflect() {
+    if (themeBtn) themeBtn.setAttribute("data-effective", effectiveTheme());
+  }
+
+  function apply(choice) {
+    root.setAttribute("data-theme", choice);
+    reflect();
+  }
+
+  /* Crossfade through the View Transitions API when available: one
+     GPU-composited fade of the whole page instead of animating color on many
+     elements each frame (which stutters with the nav backdrop blur). */
   function setTheme(choice) {
     if (document.startViewTransition && !reduceMotion) {
       document.startViewTransition(function () {
@@ -49,17 +46,17 @@
     }
   }
 
-  apply(currentChoice());
+  reflect();
 
-  segButtons.forEach(function (btn) {
-    btn.addEventListener("click", function () {
-      var choice = btn.getAttribute("data-theme-set");
-      try {
-        if (choice === "auto") localStorage.removeItem(STORAGE_KEY);
-        else localStorage.setItem(STORAGE_KEY, choice);
-      } catch (e) {}
-      setTheme(choice);
+  if (themeBtn) {
+    themeBtn.addEventListener("click", function () {
+      setTheme(effectiveTheme() === "dark" ? "light" : "dark");
     });
+  }
+
+  /* While still in Auto, keep the icon correct if the OS theme changes. */
+  darkQuery.addEventListener("change", function () {
+    if (!root.getAttribute("data-theme")) reflect();
   });
 
   /* ---------------- Scroll reveal ---------------- */
