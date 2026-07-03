@@ -179,6 +179,7 @@ img { max-width:100%; display:block; }
   display:flex; align-items:center; justify-content:space-between;
   height:64px; gap:16px;
 }
+.nav__left { display:flex; align-items:center; gap:14px; }
 .brand { display:inline-flex; align-items:center; gap:9px; font-weight:700; font-size:16.5px; letter-spacing:-.01em; }
 .brand__mark { width:26px; height:26px; flex:none; border-radius:7px; display:block; }
 .nav__right { display:flex; align-items:center; gap:18px; }
