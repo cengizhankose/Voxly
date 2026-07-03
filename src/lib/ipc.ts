@@ -38,6 +38,7 @@ export const api = {
   checkPermissions: () => invoke<PermissionState>("check_permissions"),
   requestAccessibility: () => invoke<boolean>("request_accessibility"),
   requestMicrophone: () => invoke<boolean>("request_microphone"),
+  relaunchApp: () => invoke<void>("relaunch_app"),
   resetAccessibility: () => invoke<void>("reset_accessibility_and_relaunch"),
 
   revealModelsFolder: () => invoke<void>("reveal_models_folder"),

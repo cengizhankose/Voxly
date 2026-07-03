@@ -140,6 +140,14 @@ export function OnboardingPage({ onDone }: { onDone: () => void }) {
   useEffect(() => {
     api.getSettings().then(setSettings).catch(() => {});
     api.getState().then((s) => setModelReady(s.modelReady)).catch(() => {});
+    // Resume at the Accessibility step after a relaunch-to-apply: mic is
+    // already granted from before the restart, Accessibility is what's pending.
+    api
+      .checkPermissions()
+      .then((p) => {
+        if (p.micGranted && !p.accessibilityGranted) setStep("accessibility");
+      })
+      .catch(() => {});
   }, []);
 
   // Poll permission status so grants made in System Settings reflect live.
@@ -199,6 +207,13 @@ export function OnboardingPage({ onDone }: { onDone: () => void }) {
     } finally {
       setAxBusy(false);
     }
+  }, []);
+
+  // macOS only applies a fresh Accessibility grant after a relaunch. This quits
+  // and reopens the app; on next launch the grant is detected and onboarding
+  // resumes at the Accessibility step (mic already granted).
+  const relaunch = useCallback(() => {
+    void api.relaunchApp();
   }, []);
 
   const hotkeyGlyphs = useMemo(() => parseHotkey(settings?.hotkey ?? "Alt+D"), [settings]);
@@ -314,10 +329,14 @@ export function OnboardingPage({ onDone }: { onDone: () => void }) {
             pendingLabel="Enable Voxly in System Settings"
             busy={axBusy}
             onGrant={requestAx}
+            onRelaunch={relaunch}
+            relaunchLabel="Enabled it? Quit & Reopen to apply"
             note={
               <>
-                Optional. Without it, Voxly still works — transcripts are copied to your{" "}
-                <strong>clipboard</strong> for you to paste manually.
+                macOS only applies this after a relaunch. Enable Voxly under System
+                Settings → Privacy &amp; Security → Accessibility, then use{" "}
+                <strong>Quit &amp; Reopen</strong>. Optional — without it, transcripts
+                are copied to your <strong>clipboard</strong> to paste manually.
               </>
             }
           />
@@ -393,10 +412,24 @@ function PermissionStep(props: {
   pendingLabel: string;
   busy: boolean;
   onGrant: () => void;
+  onRelaunch?: () => void;
+  relaunchLabel?: string;
   note?: ReactNode;
 }) {
-  const { icon, granted, title, lede, grantLabel, grantedLabel, pendingLabel, busy, onGrant, note } =
-    props;
+  const {
+    icon,
+    granted,
+    title,
+    lede,
+    grantLabel,
+    grantedLabel,
+    pendingLabel,
+    busy,
+    onGrant,
+    onRelaunch,
+    relaunchLabel,
+    note,
+  } = props;
   return (
     <div className="onb-step">
       <div className={`onb-disc${granted ? " is-granted" : " pending"}`}>
@@ -416,6 +449,15 @@ function PermissionStep(props: {
           </>
         )}
       </div>
+      {!granted && onRelaunch && (
+        <button
+          className="btn btn-ghost btn-compact"
+          style={{ marginTop: 12 }}
+          onClick={onRelaunch}
+        >
+          {relaunchLabel ?? "Quit & Reopen"}
+        </button>
+      )}
       {note && <p className="onb-note">{note}</p>}
     </div>
   );

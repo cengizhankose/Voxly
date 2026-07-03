@@ -202,32 +202,23 @@ pub fn complete_onboarding(app: AppHandle) {
     st.settings.lock().save();
 }
 
-/// Wipe Voxly's Accessibility TCC entry and relaunch so a fresh grant binds to
-/// the current code signature (ad-hoc CDHash churn workaround).
+/// Quit and reopen the app. macOS only applies a freshly-granted Accessibility
+/// permission after the process relaunches, so this is the "I granted it but it
+/// isn't detected yet" fix. Re-execs the same on-disk binary (identity stable),
+/// which works for both dev and bundled builds.
+#[tauri::command]
+pub fn relaunch_app(app: AppHandle) {
+    app.restart();
+}
+
+/// Wipe Voxly's Accessibility TCC entry, open System Settings, then relaunch —
+/// for the harder case where a stale entry (ad-hoc CDHash churn) blocks the
+/// grant from ever taking effect.
 #[tauri::command]
 pub fn reset_accessibility_and_relaunch(app: AppHandle) {
     let _ = std::process::Command::new("tccutil")
         .args(["reset", "Accessibility", "com.voxly.app"])
         .spawn();
     permissions::open_accessibility_settings();
-
-    if let Ok(exe) = std::env::current_exe() {
-        // Resolve the .app bundle from the executable path if possible.
-        let bundle = exe
-            .ancestors()
-            .find(|p| p.extension().map(|e| e == "app").unwrap_or(false))
-            .map(|p| p.to_path_buf());
-        let target = bundle.unwrap_or(exe);
-        let path = target.to_string_lossy().to_string();
-        let _ = std::process::Command::new("/bin/sh")
-            .arg("-c")
-            .arg(format!("sleep 1.5; /usr/bin/open \"{path}\""))
-            .spawn();
-    }
-
-    let handle = app.clone();
-    std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_millis(400));
-        handle.exit(0);
-    });
+    app.restart();
 }

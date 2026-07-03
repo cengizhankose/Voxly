@@ -190,6 +190,7 @@ pub fn run() {
             commands::request_microphone,
             commands::reveal_models_folder,
             commands::complete_onboarding,
+            commands::relaunch_app,
             commands::reset_accessibility_and_relaunch,
         ])
         .run(tauri::generate_context!())

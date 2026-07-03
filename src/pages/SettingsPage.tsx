@@ -293,6 +293,23 @@ function PermissionsTab({ dictation }: { dictation: DictationState }) {
         />
       </div>
 
+      {!accessibilityGranted && (
+        <div className="settings-note" style={{ alignItems: "center" }}>
+          <InfoIcon />
+          <p style={{ flex: 1 }}>
+            Enabled Voxly under Accessibility but it still shows “Grant”? macOS
+            only applies the permission after the app relaunches.
+          </p>
+          <button
+            className="btn btn-ghost btn-compact"
+            style={{ flexShrink: 0 }}
+            onClick={() => void api.relaunchApp()}
+          >
+            Quit &amp; Reopen
+          </button>
+        </div>
+      )}
+
       <div className="settings-note">
         <InfoIcon />
         <p>
