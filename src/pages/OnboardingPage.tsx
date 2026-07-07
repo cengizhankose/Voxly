@@ -7,6 +7,15 @@ import "../styles/onboarding.css";
 type Step = "welcome" | "microphone" | "accessibility" | "ready" | "done";
 const STEPS: Step[] = ["welcome", "microphone", "accessibility", "ready", "done"];
 
+// Rail metadata — label + short caption shown in the left progress rail.
+const RAIL_META: Record<Step, { label: string; caption: string }> = {
+  welcome: { label: "Welcome", caption: "What Voxly does" },
+  microphone: { label: "Microphone", caption: "Hear your voice" },
+  accessibility: { label: "Auto-paste", caption: "Place the text" },
+  ready: { label: "Hotkey test", caption: "Try it live" },
+  done: { label: "Finish", caption: "Start dictating" },
+};
+
 // ---- Inline icon set (stroke = currentColor) ----
 type IconProps = { className?: string };
 
@@ -85,6 +94,15 @@ function SpinIcon({ className }: IconProps) {
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor"
       strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
       <path d="M12 3a9 9 0 1 0 9 9" />
+    </svg>
+  );
+}
+function ShieldIcon({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 3 5 6v5c0 4.4 3 8.3 7 9.5 4-1.2 7-5.1 7-9.5V6l-7-3z" />
+      <path d="M9 12l2 2 4-4" strokeWidth="2" />
     </svg>
   );
 }
@@ -274,113 +292,140 @@ export function OnboardingPage({ onDone }: { onDone: () => void }) {
 
   return (
     <div className="onb">
-      {/* Top rail */}
-      <div className="onb-rail">
+      {/* ---- Left rail: brand + vertical progress + privacy seal ---- */}
+      <aside className="onb-rail" aria-hidden="false">
         <div className="onb-brand">
           <span className="onb-mark"><WaveIcon /></span>
-          <span className="display">Voxly</span>
+          <span className="onb-brand-text">
+            <span className="display">Voxly</span>
+            <span className="kicker">Local speech-to-text</span>
+          </span>
         </div>
-        <div className="onb-steps" aria-hidden="true">
-          {STEPS.map((s, i) => (
-            <span
-              key={s}
-              className={`onb-tick${i < stepIndex ? " done" : i === stepIndex ? " active" : ""}`}
-            />
-          ))}
+
+        <ol className="onb-track" aria-label="Setup progress">
+          {STEPS.map((s, i) => {
+            const state = i < stepIndex ? "done" : i === stepIndex ? "active" : "todo";
+            const meta = RAIL_META[s];
+            return (
+              <li key={s} className={`onb-node ${state}`} aria-current={state === "active" ? "step" : undefined}>
+                <span className="onb-node-disc">
+                  {state === "done" ? <CheckIcon /> : <span className="onb-node-num">{i + 1}</span>}
+                </span>
+                <span className="onb-node-text">
+                  <span className="onb-node-label">{meta.label}</span>
+                  <span className="onb-node-caption">{meta.caption}</span>
+                </span>
+              </li>
+            );
+          })}
+        </ol>
+
+        <div className="onb-privacy">
+          <span className="onb-privacy-ico"><ShieldIcon /></span>
+          <span className="onb-privacy-text">
+            Everything runs on this Mac. Your voice never leaves the device.
+          </span>
         </div>
-      </div>
+      </aside>
 
-      {/* Body */}
-      <div className="onb-body">
-        {step === "welcome" && <WelcomeStep glyphs={hotkeyGlyphs} />}
+      {/* ---- Right stage: the active step ---- */}
+      <section className="onb-stage">
+        <div className="onb-stage-scroll">
+          <div className="onb-body" key={step}>
+            {step === "welcome" && <WelcomeStep glyphs={hotkeyGlyphs} />}
 
-        {step === "microphone" && (
-          <PermissionStep
-            icon={<MicIcon />}
-            granted={perms.micGranted}
-            title="Enable your microphone"
-            lede={
-              <>
-                Voxly listens only while you dictate, transcribes it{" "}
-                <strong>entirely on this Mac</strong>, and never sends your voice anywhere.
-              </>
-            }
-            grantLabel="Grant microphone access"
-            grantedLabel="Microphone ready"
-            pendingLabel="Awaiting permission"
-            busy={micBusy}
-            onGrant={requestMic}
-          />
-        )}
+            {step === "microphone" && (
+              <PermissionStep
+                icon={<MicIcon />}
+                granted={perms.micGranted}
+                kicker="Permission 1 of 2"
+                title="Enable your microphone"
+                lede={
+                  <>
+                    Voxly listens only while you dictate, transcribes it{" "}
+                    <strong>entirely on this Mac</strong>, and never sends your voice anywhere.
+                  </>
+                }
+                grantLabel="Grant microphone access"
+                grantedLabel="Microphone ready"
+                pendingLabel="Awaiting permission"
+                busy={micBusy}
+                onGrant={requestMic}
+              />
+            )}
 
-        {step === "accessibility" && (
-          <PermissionStep
-            icon={<TapIcon />}
-            granted={perms.accessibilityGranted}
-            title="Allow auto-paste"
-            lede={
-              <>
-                Accessibility lets Voxly paste your transcript straight into the focused app via a
-                synthesized <strong>Cmd+V</strong>.
-              </>
-            }
-            grantLabel="Grant accessibility access"
-            grantedLabel="Accessibility granted"
-            pendingLabel="Enable Voxly in System Settings"
-            busy={axBusy}
-            onGrant={requestAx}
-            onRelaunch={relaunch}
-            relaunchLabel="Enabled it? Quit & Reopen to apply"
-            note={
-              <>
-                macOS only applies this after a relaunch. Enable Voxly under System
-                Settings → Privacy &amp; Security → Accessibility, then use{" "}
-                <strong>Quit &amp; Reopen</strong>. Optional — without it, transcripts
-                are copied to your <strong>clipboard</strong> to paste manually.
-              </>
-            }
-          />
-        )}
+            {step === "accessibility" && (
+              <PermissionStep
+                icon={<TapIcon />}
+                granted={perms.accessibilityGranted}
+                kicker="Permission 2 of 2 · Optional"
+                title="Allow auto-paste"
+                lede={
+                  <>
+                    Accessibility lets Voxly paste your transcript straight into the focused app via a
+                    synthesized <strong>Cmd+V</strong>.
+                  </>
+                }
+                grantLabel="Grant accessibility access"
+                grantedLabel="Accessibility granted"
+                pendingLabel="Enable Voxly in System Settings"
+                busy={axBusy}
+                onGrant={requestAx}
+                onRelaunch={relaunch}
+                relaunchLabel="Enabled it? Quit & Reopen to apply"
+                note={
+                  <>
+                    macOS only applies this after a relaunch. Enable Voxly under System
+                    Settings → Privacy &amp; Security → Accessibility, then use{" "}
+                    <strong>Quit &amp; Reopen</strong>. Optional — without it, transcripts
+                    are copied to your <strong>clipboard</strong> to paste manually.
+                  </>
+                }
+              />
+            )}
 
-        {step === "ready" && (
-          <ReadyStep
-            glyphs={hotkeyGlyphs}
-            hotkeyFired={hotkeyFired}
-            micGranted={perms.micGranted}
-            axGranted={perms.accessibilityGranted}
-            modelReady={modelReady}
-          />
-        )}
+            {step === "ready" && (
+              <ReadyStep
+                glyphs={hotkeyGlyphs}
+                hotkeyFired={hotkeyFired}
+                micGranted={perms.micGranted}
+                axGranted={perms.accessibilityGranted}
+                modelReady={modelReady}
+              />
+            )}
 
-        {step === "done" && <DoneStep glyphs={hotkeyGlyphs} />}
-      </div>
+            {step === "done" && <DoneStep glyphs={hotkeyGlyphs} />}
+          </div>
+        </div>
 
-      {/* Footer */}
-      <div className="onb-foot">
-        <span className="onb-foot-count">
-          Step {stepIndex + 1} <span className="muted">of {STEPS.length}</span>
-        </span>
-        <div className="onb-foot-actions">
-          {(step === "microphone" || step === "accessibility") && !canAdvance && (
-            <button className="onb-skip" onClick={goNext}>
-              {step === "accessibility" ? "Skip — use clipboard" : "Skip for now"}
+        {/* ---- Footer controls ---- */}
+        <footer className="onb-foot">
+          <span className="onb-foot-count">
+            Step {stepIndex + 1} <span className="muted">/ {STEPS.length}</span>
+          </span>
+          <div className="onb-foot-actions">
+            {(step === "microphone" || step === "accessibility") && !canAdvance && (
+              <button className="onb-skip" onClick={goNext}>
+                {step === "accessibility" ? "Skip — use clipboard" : "Skip for now"}
+              </button>
+            )}
+            {stepIndex > 0 && (
+              <button className="btn btn-ghost" onClick={goBack} disabled={finishing}>
+                Back
+              </button>
+            )}
+            <button
+              className="btn btn-primary"
+              onClick={goNext}
+              disabled={!canAdvance || finishing}
+            >
+              {finishing ? <SpinIcon className="spin" /> : null}
+              {finishing ? "Finishing…" : nextLabel}
+              {!finishing && step !== "done" && <ArrowIcon />}
             </button>
-          )}
-          {stepIndex > 0 && (
-            <button className="btn btn-ghost" onClick={goBack} disabled={finishing}>
-              Back
-            </button>
-          )}
-          <button
-            className="btn btn-primary"
-            onClick={goNext}
-            disabled={!canAdvance || finishing}
-          >
-            {finishing ? "Finishing…" : nextLabel}
-            {!finishing && step !== "done" && <ArrowIcon />}
-          </button>
-        </div>
-      </div>
+          </div>
+        </footer>
+      </section>
     </div>
   );
 }
@@ -389,14 +434,18 @@ export function OnboardingPage({ onDone }: { onDone: () => void }) {
 function WelcomeStep({ glyphs }: { glyphs: string[] }) {
   return (
     <div className="onb-step">
-      <span className="kicker">Local speech-to-text</span>
-      <div className="onb-disc"><WaveIcon /></div>
-      <h1 className="display onb-title">Welcome to Voxly</h1>
+      <span className="onb-eyebrow kicker">Welcome</span>
+      <div className="onb-disc onb-disc-hero"><WaveIcon /></div>
+      <h1 className="display onb-title">Dictate anywhere,<br />privately.</h1>
       <p className="onb-lede">
         Press <KeyCombo glyphs={glyphs} /> anywhere on your Mac and start talking. Voxly
         transcribes on-device — <strong>your voice never leaves the machine</strong>.
       </p>
-      <p className="onb-note">Two quick permissions and you're dictating. Takes about a minute.</p>
+      <ul className="onb-highlights" role="list">
+        <li><span className="onb-hl-ico"><CheckIcon /></span>Two quick permissions, about a minute</li>
+        <li><span className="onb-hl-ico"><CheckIcon /></span>No account, no cloud, no telemetry</li>
+        <li><span className="onb-hl-ico"><CheckIcon /></span>Lives quietly in your menu bar</li>
+      </ul>
     </div>
   );
 }
@@ -405,6 +454,7 @@ function WelcomeStep({ glyphs }: { glyphs: string[] }) {
 function PermissionStep(props: {
   icon: ReactNode;
   granted: boolean;
+  kicker: string;
   title: string;
   lede: ReactNode;
   grantLabel: string;
@@ -419,6 +469,7 @@ function PermissionStep(props: {
   const {
     icon,
     granted,
+    kicker,
     title,
     lede,
     grantLabel,
@@ -432,6 +483,7 @@ function PermissionStep(props: {
   } = props;
   return (
     <div className="onb-step">
+      <span className="onb-eyebrow kicker">{kicker}</span>
       <div className={`onb-disc${granted ? " is-granted" : " pending"}`}>
         {granted ? <CheckIcon /> : icon}
       </div>
@@ -443,6 +495,7 @@ function PermissionStep(props: {
         ) : (
           <>
             <button className="btn btn-primary" onClick={onGrant} disabled={busy}>
+              {busy ? <SpinIcon className="spin" /> : null}
               {busy ? "Requesting…" : grantLabel}
             </button>
             <StatusPill tone="warn" label={pendingLabel} busy={busy} />
@@ -450,11 +503,7 @@ function PermissionStep(props: {
         )}
       </div>
       {!granted && onRelaunch && (
-        <button
-          className="btn btn-ghost btn-compact"
-          style={{ marginTop: 12 }}
-          onClick={onRelaunch}
-        >
+        <button className="btn btn-ghost btn-compact onb-relaunch" onClick={onRelaunch}>
           {relaunchLabel ?? "Quit & Reopen"}
         </button>
       )}
@@ -474,7 +523,10 @@ function ReadyStep(props: {
   const { glyphs, hotkeyFired, micGranted, axGranted, modelReady } = props;
   return (
     <div className="onb-step">
-      <div className="onb-disc"><KeyIcon /></div>
+      <span className="onb-eyebrow kicker">Live test</span>
+      <div className={`onb-disc${hotkeyFired ? " is-granted" : " pending"}`}>
+        {hotkeyFired ? <CheckIcon /> : <KeyIcon />}
+      </div>
       <h1 className="display onb-title">Try your hotkey</h1>
       <p className="onb-lede">
         Press <KeyCombo glyphs={glyphs} fired={hotkeyFired} /> now to confirm it works — start and
@@ -528,6 +580,9 @@ function ReadyRow({
         <span className="onb-ready-name">{name}</span>
         <span className="onb-ready-hint">{hint}</span>
       </span>
+      <span className={`onb-ready-tag${ok ? " ok" : warnOnly ? " warn" : ""}`}>
+        {ok ? "Ready" : warnOnly ? "Optional" : "Pending"}
+      </span>
     </div>
   );
 }
@@ -536,6 +591,7 @@ function ReadyRow({
 function DoneStep({ glyphs }: { glyphs: string[] }) {
   return (
     <div className="onb-step">
+      <span className="onb-eyebrow kicker">Setup complete</span>
       <div className="onb-seal"><SealIcon /></div>
       <h1 className="display onb-title">You're all set</h1>
       <p className="onb-lede">
@@ -551,7 +607,7 @@ function KeyCombo({ glyphs, fired }: { glyphs: string[]; fired?: boolean }) {
   return (
     <span className={`onb-keys${fired ? " fired" : ""}`}>
       {glyphs.map((g, i) => (
-        <span key={`${g}-${i}`} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+        <span key={`${g}-${i}`} className="onb-keys-seg">
           {i > 0 && <span className="plus">+</span>}
           <kbd className="kbd">{g}</kbd>
         </span>

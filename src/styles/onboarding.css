@@ -1,103 +1,244 @@
 /* Onboarding — first-launch wizard.
    Scoped under .onb to avoid leaking into the app shell. Uses only the
-   shared Signal tokens from global.css (never redefines them). */
+   shared Signal tokens from global.css (never redefines them).
+
+   Layout: a two-pane native-app shell. Left is a fixed "signal" rail
+   (brand + vertical progress + privacy seal); right is the animated stage
+   where each step plays out above a pinned footer. */
 
 .onb {
-  position: relative;
   height: 100vh;
   width: 100%;
-  display: flex;
-  flex-direction: column;
-  background:
-    radial-gradient(120% 90% at 50% -10%, var(--accent-soft), transparent 60%),
-    var(--bg);
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 264px 1fr;
+  background: var(--bg);
   overflow: hidden;
 }
 
-/* Faint grid texture for depth — sits behind everything, non-interactive. */
-.onb::before {
+/* =====================================================================
+   LEFT RAIL
+   ===================================================================== */
+.onb-rail {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  padding: 26px 22px 22px;
+  background:
+    radial-gradient(140% 60% at 0% 0%, var(--accent-soft), transparent 58%),
+    var(--surface-2);
+  border-right: 1px solid var(--border);
+  overflow: hidden;
+}
+/* Hairline grid texture behind the rail — subtle depth, non-interactive. */
+.onb-rail::before {
   content: "";
   position: absolute;
   inset: 0;
   background-image:
     linear-gradient(to right, var(--border) 1px, transparent 1px),
     linear-gradient(to bottom, var(--border) 1px, transparent 1px);
-  background-size: 40px 40px;
-  opacity: 0.35;
-  -webkit-mask-image: radial-gradient(90% 70% at 50% 30%, #000 0%, transparent 78%);
-  mask-image: radial-gradient(90% 70% at 50% 30%, #000 0%, transparent 78%);
+  background-size: 30px 30px;
+  opacity: 0.25;
+  -webkit-mask-image: radial-gradient(120% 80% at 0% 0%, #000, transparent 72%);
+  mask-image: radial-gradient(120% 80% at 0% 0%, #000, transparent 72%);
   pointer-events: none;
 }
-
-/* ---- Top rail: brand + progress ---- */
-.onb-rail {
+.onb-rail > * {
   position: relative;
   z-index: 1;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 20px 28px 0;
-  flex-shrink: 0;
 }
+
+/* ---- Brand block ---- */
 .onb-brand {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 11px;
+}
+.onb-brand-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
 }
 .onb-brand .display {
-  font-size: 16px;
+  font-size: 17px;
   letter-spacing: -0.02em;
+  line-height: 1;
+}
+.onb-brand .kicker {
+  font-size: 9px;
+  letter-spacing: 0.16em;
 }
 .onb-mark {
   display: grid;
   place-items: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 8px;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: 9px;
   background: var(--accent);
   color: var(--accent-ink);
-  box-shadow: 0 3px 10px rgba(225, 29, 84, 0.28);
+  box-shadow: 0 4px 12px rgba(225, 29, 84, 0.28);
 }
 .onb-mark svg {
+  width: 17px;
+  height: 17px;
+}
+
+/* ---- Vertical progress track ---- */
+.onb-track {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  list-style: none;
+  flex: 1;
+}
+.onb-node {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 7px 0;
+}
+/* Connector line running through the disc column. */
+.onb-node::before {
+  content: "";
+  position: absolute;
+  left: 13px;
+  top: 30px;
+  bottom: -9px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--border-strong);
+  transition: background 0.3s ease;
+}
+.onb-node:last-child::before {
+  display: none;
+}
+.onb-node.done::before {
+  background: var(--accent);
+}
+
+.onb-node-disc {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 1.5px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  transition: border-color 0.16s ease, background 0.16s ease, color 0.16s ease,
+    box-shadow 0.16s ease;
+}
+.onb-node-disc svg {
   width: 15px;
   height: 15px;
 }
+.onb-node-num {
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1;
+}
+.onb-node.active .onb-node-disc {
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  background: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+.onb-node.done .onb-node-disc {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
 
-.onb-steps {
+.onb-node-text {
   display: flex;
-  align-items: center;
-  gap: 7px;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 2px;
+  min-width: 0;
 }
-.onb-tick {
-  width: 26px;
-  height: 4px;
-  border-radius: 999px;
-  background: var(--border-strong);
-  transition: background 0.35s ease, box-shadow 0.35s ease;
+.onb-node-label {
+  font-size: 12.5px;
+  font-weight: 550;
+  color: var(--muted);
+  letter-spacing: -0.01em;
+  transition: color 0.16s ease;
 }
-.onb-tick.done {
-  background: var(--accent);
+.onb-node-caption {
+  font-size: 10.5px;
+  color: var(--muted);
+  opacity: 0.72;
 }
-.onb-tick.active {
-  background: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
+.onb-node.active .onb-node-label {
+  color: var(--text);
+}
+.onb-node.done .onb-node-label {
+  color: var(--text);
 }
 
-/* ---- Body: the animated step ---- */
-.onb-body {
+/* ---- Privacy seal (bottom of rail) ---- */
+.onb-privacy {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 11px 12px;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.onb-privacy-ico {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  color: var(--positive);
+}
+.onb-privacy-ico svg {
+  width: 18px;
+  height: 18px;
+}
+.onb-privacy-text {
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+/* =====================================================================
+   RIGHT STAGE
+   ===================================================================== */
+.onb-stage {
   position: relative;
-  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background:
+    radial-gradient(120% 80% at 50% -20%, var(--accent-soft), transparent 55%),
+    var(--bg);
+}
+.onb-stage-scroll {
   flex: 1;
+  min-height: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 12px 28px;
-  min-height: 0;
+  overflow-y: auto;
+  padding: 28px 40px;
 }
+.onb-body {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
 .onb-step {
   width: 100%;
-  max-width: 460px;
+  max-width: 440px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -116,9 +257,13 @@
   }
 }
 
+.onb-eyebrow {
+  margin-bottom: -2px;
+}
 .onb-title {
-  font-size: 27px;
-  line-height: 1.1;
+  font-size: 28px;
+  line-height: 1.12;
+  letter-spacing: -0.035em;
 }
 .onb-lede {
   font-size: 13.5px;
@@ -147,9 +292,13 @@
   width: 40px;
   height: 40px;
 }
+.onb-disc-hero {
+  box-shadow: 0 8px 30px -12px rgba(225, 29, 84, 0.45);
+}
 .onb-disc.is-granted {
   color: var(--positive);
   background: color-mix(in srgb, var(--positive) 12%, transparent);
+  animation: onb-pop 0.42s cubic-bezier(0.2, 1.3, 0.4, 1) both;
 }
 /* Soft pulsing halo while a permission is still pending. */
 .onb-disc.pending::after {
@@ -177,16 +326,17 @@
 .onb-seal {
   display: grid;
   place-items: center;
-  width: 96px;
-  height: 96px;
+  width: 100px;
+  height: 100px;
   border-radius: 50%;
   color: var(--positive);
   background: color-mix(in srgb, var(--positive) 12%, transparent);
+  box-shadow: 0 0 0 8px color-mix(in srgb, var(--positive) 6%, transparent);
   animation: onb-pop 0.5s cubic-bezier(0.2, 1.3, 0.4, 1) both;
 }
 .onb-seal svg {
-  width: 52px;
-  height: 52px;
+  width: 54px;
+  height: 54px;
 }
 @keyframes onb-pop {
   from {
@@ -197,6 +347,37 @@
     transform: scale(1);
     opacity: 1;
   }
+}
+
+/* ---- Welcome highlights list ---- */
+.onb-highlights {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  list-style: none;
+  margin-top: 6px;
+  text-align: left;
+}
+.onb-highlights li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+  color: var(--text);
+}
+.onb-hl-ico {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  color: var(--positive);
+  background: color-mix(in srgb, var(--positive) 12%, transparent);
+}
+.onb-hl-ico svg {
+  width: 12px;
+  height: 12px;
 }
 
 /* ---- Action area under the lede ---- */
@@ -212,6 +393,9 @@
   height: 34px;
   padding: 0 18px;
   font-size: 13.5px;
+}
+.onb-relaunch {
+  margin-top: 12px;
 }
 
 /* Live status pill (granted / pending / waiting). */
@@ -252,6 +436,10 @@
     transform: rotate(360deg);
   }
 }
+/* Shared spinner (used in buttons too). */
+.spin {
+  animation: onb-spin 0.9s linear infinite;
+}
 
 /* Helper note (e.g. clipboard fallback explainer). */
 .onb-note {
@@ -267,6 +455,12 @@
 
 /* ---- Keycap combo (hotkey display) ---- */
 .onb-keys {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  vertical-align: middle;
+}
+.onb-keys-seg {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -291,7 +485,8 @@
   font-size: 14px;
   font-weight: 600;
   color: var(--text);
-  transition: transform 0.1s ease, border-color 0.2s ease, background 0.2s ease;
+  transition: transform 0.1s ease, border-color 0.2s ease, background 0.2s ease,
+    color 0.2s ease;
 }
 .onb-keys.fired .kbd {
   border-color: var(--accent);
@@ -308,11 +503,11 @@
 /* ---- Readiness checklist card ---- */
 .onb-ready {
   width: 100%;
-  max-width: 380px;
+  max-width: 400px;
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 4px 14px;
+  padding: 4px 16px;
   border-radius: var(--radius-lg);
   background: var(--surface);
   border: 1px solid var(--border);
@@ -320,8 +515,8 @@
 .onb-ready-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 2px;
+  gap: 11px;
+  padding: 11px 2px;
   border-bottom: 1px solid var(--border);
   text-align: left;
 }
@@ -352,6 +547,7 @@
   flex-direction: column;
   gap: 1px;
   min-width: 0;
+  flex: 1;
 }
 .onb-ready-name {
   font-size: 12.5px;
@@ -362,21 +558,43 @@
   font-size: 11px;
   color: var(--muted);
 }
+.onb-ready-tag {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 3px 7px;
+  border-radius: 999px;
+  color: var(--muted);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+.onb-ready-tag.ok {
+  color: var(--positive);
+  background: color-mix(in srgb, var(--positive) 10%, transparent);
+  border-color: color-mix(in srgb, var(--positive) 24%, transparent);
+}
+.onb-ready-tag.warn {
+  color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 10%, transparent);
+  border-color: color-mix(in srgb, var(--warning) 24%, transparent);
+}
 
-/* ---- Footer controls ---- */
+/* =====================================================================
+   FOOTER CONTROLS
+   ===================================================================== */
 .onb-foot {
-  position: relative;
-  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 14px 28px 22px;
+  padding: 14px 28px 20px;
   flex-shrink: 0;
   border-top: 1px solid var(--border);
   background: color-mix(in srgb, var(--surface) 55%, transparent);
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
 }
 .onb-foot-count {
   font-family: var(--font-mono);
@@ -389,6 +607,10 @@
   display: flex;
   align-items: center;
   gap: 8px;
+}
+.onb-foot-actions .btn .spin {
+  width: 14px;
+  height: 14px;
 }
 .onb-skip {
   background: transparent;
@@ -405,12 +627,89 @@
   background: var(--surface-2);
 }
 
+/* =====================================================================
+   FOCUS + INTERACTION STATES
+   ===================================================================== */
+.onb button:focus-visible,
+.onb kbd:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.onb .btn-primary:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.onb .btn-ghost:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.onb-skip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* =====================================================================
+   RESPONSIVE — collapse rail into a header strip under ~700px window
+   ===================================================================== */
+@media (max-width: 720px) {
+  .onb {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
+  .onb-rail {
+    flex-direction: row;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 18px;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+  }
+  .onb-rail::before {
+    display: none;
+  }
+  .onb-track {
+    flex-direction: row;
+    align-items: center;
+    gap: 4px;
+    flex: 1;
+  }
+  .onb-node {
+    flex-direction: column;
+    align-items: center;
+    padding: 0;
+    gap: 4px;
+  }
+  .onb-node::before {
+    left: 50%;
+    top: 13px;
+    bottom: auto;
+    right: -50%;
+    width: auto;
+    height: 2px;
+    transform: translateX(14px);
+  }
+  .onb-node-text {
+    display: none;
+  }
+  .onb-privacy {
+    display: none;
+  }
+}
+
+/* =====================================================================
+   REDUCED MOTION
+   ===================================================================== */
 @media (prefers-reduced-motion: reduce) {
   .onb-step,
   .onb-seal,
+  .onb-disc.is-granted,
   .onb-disc.pending::after,
   .onb-keys.fired .kbd,
-  .onb-status .spin {
+  .onb-status .spin,
+  .spin {
     animation: none !important;
+  }
+  .onb .btn-primary:active:not(:disabled),
+  .onb .btn-ghost:active:not(:disabled) {
+    transform: none;
   }
 }
