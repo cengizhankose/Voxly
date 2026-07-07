@@ -7,6 +7,17 @@ import "../styles/models.css";
 // Canonical order shown in the native page (tiny -> large).
 const MODEL_ORDER: ModelSize[] = ["tiny", "base", "small", "medium", "large"];
 
+// Static, page-local metadata for each model size: an approximate on-disk
+// footprint and a one-line character sketch. Presentation only — the backend
+// remains the source of truth for availability/active/installed status.
+const MODEL_META: Record<ModelSize, { approxSize: string; blurb: string }> = {
+  tiny: { approxSize: "~75 MB", blurb: "Fastest. Great for quick notes and short phrases." },
+  base: { approxSize: "~142 MB", blurb: "Balanced default. Solid accuracy at real-time speed." },
+  small: { approxSize: "~466 MB", blurb: "Sharper on accents and noisier rooms." },
+  medium: { approxSize: "~1.5 GB", blurb: "High accuracy for long-form dictation." },
+  large: { approxSize: "~2.9 GB", blurb: "Most accurate. Slowest, heaviest on memory." },
+};
+
 // Live per-model download state, driven entirely by backend events. `null`
 // error means "in flight"; a string means the last attempt failed.
 interface DownloadState {
@@ -111,6 +122,14 @@ export function ModelsPage() {
     );
   }, [models]);
 
+  // Summary metrics for the header strip.
+  const summary = useMemo(() => {
+    const list = models ?? [];
+    const active = list.find((m) => m.active) ?? null;
+    const installed = list.filter((m) => m.available).length;
+    return { active, installed, total: list.length };
+  }, [models]);
+
   const startDownload = useCallback(async (size: ModelSize) => {
     // Optimistically mark in-flight so the button flips immediately; the first
     // progress event overwrites this with real numbers.
@@ -144,6 +163,14 @@ export function ModelsPage() {
         return next;
       });
     }
+  }, []);
+
+  const dismissError = useCallback((size: ModelSize) => {
+    setDownloads((prev) => {
+      const next = { ...prev };
+      delete next[size];
+      return next;
+    });
   }, []);
 
   const activate = useCallback(
@@ -188,20 +215,74 @@ export function ModelsPage() {
       </header>
 
       <section className="section">
-        <div className="kicker section-title">Whisper models</div>
-        <div className="card">
+        <div className="section-head">
+          <div className="kicker section-title">Whisper models</div>
+          <button
+            className="btn btn-ghost btn-compact"
+            onClick={reveal}
+            title="Open the models folder in Finder"
+          >
+            <FolderIcon />
+            Reveal Folder
+          </button>
+        </div>
+
+        {/* Summary strip: active model + installed count. Skeletonized on load. */}
+        <div className="model-summary" aria-live="polite">
+          <div className="summary-cell">
+            <span className="summary-key">Active model</span>
+            <span className="summary-val">
+              {models === null ? (
+                <span className="summary-shimmer" />
+              ) : summary.active ? (
+                <>
+                  <span className="summary-dot" aria-hidden="true" />
+                  {summary.active.displayName}
+                </>
+              ) : (
+                <span className="muted">None selected</span>
+              )}
+            </span>
+          </div>
+          <div className="summary-divider" aria-hidden="true" />
+          <div className="summary-cell">
+            <span className="summary-key">Installed</span>
+            <span className="summary-val mono">
+              {models === null ? (
+                <span className="summary-shimmer" />
+              ) : (
+                `${summary.installed} / ${summary.total}`
+              )}
+            </span>
+          </div>
+        </div>
+
+        <div className="card model-card">
           {models === null ? (
             <div className="model-skeleton" aria-busy="true" aria-live="polite">
               {MODEL_ORDER.map((s) => (
-                <div key={s} className="skeleton-row" />
+                <div key={s} className="skeleton-row">
+                  <div className="skeleton-glyph" />
+                  <div className="skeleton-lines">
+                    <div className="skeleton-line skeleton-line-lg" />
+                    <div className="skeleton-line skeleton-line-sm" />
+                  </div>
+                  <div className="skeleton-pill" />
+                </div>
               ))}
             </div>
           ) : rows.length === 0 ? (
-            <div className="empty" style={{ height: "auto", padding: "24px 0" }}>
-              <span className="muted">No models available.</span>
+            <div className="model-empty">
+              <span className="model-empty-glyph" aria-hidden="true">
+                <BoxIcon />
+              </span>
+              <span className="model-empty-title">No models available</span>
+              <span className="muted">
+                No Whisper models were reported by the backend.
+              </span>
             </div>
           ) : (
-            <div className="models-list">
+            <div className="models-list" role="list">
               {rows.map((model) => (
                 <ModelRow
                   key={model.size}
@@ -211,6 +292,8 @@ export function ModelsPage() {
                   busy={busySize === model.size}
                   onDownload={() => void startDownload(model.size)}
                   onCancel={() => void cancelDownload(model.size)}
+                  onRetry={() => void startDownload(model.size)}
+                  onDismissError={() => dismissError(model.size)}
                   onActivate={() => void activate(model.size)}
                   onDelete={() => void remove(model)}
                 />
@@ -251,6 +334,8 @@ interface ModelRowProps {
   busy: boolean;
   onDownload: () => void;
   onCancel: () => void;
+  onRetry: () => void;
+  onDismissError: () => void;
   onActivate: () => void;
   onDelete: () => void;
 }
@@ -262,13 +347,15 @@ function ModelRow({
   busy,
   onDownload,
   onCancel,
+  onRetry,
+  onDismissError,
   onActivate,
   onDelete,
 }: ModelRowProps) {
   const isDownloading = download?.inFlight ?? false;
   const isFailed = !isDownloading && download?.error != null;
 
-  // Precedence mirrors the native switch: downloading > failed > available > not-downloaded.
+  // Precedence mirrors the native switch: downloading > failed > active > available > missing.
   const state: "downloading" | "failed" | "active" | "available" | "missing" =
     isDownloading
       ? "downloading"
@@ -291,25 +378,29 @@ function ModelRow({
             ? "is-available"
             : "is-missing";
 
-  const pct =
-    download && download.totalBytes > 0
-      ? Math.round(download.progress * 100)
-      : Math.round((download?.progress ?? 0) * 100);
+  const meta = MODEL_META[model.size];
+  const pct = Math.round((download?.progress ?? 0) * 100);
+  // Constrain the visual bar so a fresh download still reads as "started".
+  const barPct = Math.min(100, Math.max(2, pct));
 
   return (
-    <div className={`model-row ${stateClass}`}>
+    <div className={`model-row ${stateClass}`} role="listitem">
       <div className="model-main">
         <span className="model-icon" aria-hidden="true">
           <StatusIcon state={state} />
         </span>
 
         <div className="model-info">
-          <span className="model-name">{model.displayName}</span>
-          {model.active && (
-            <div className="model-sub">
-              <span className="badge badge-accent badge-dot">Active model</span>
-            </div>
-          )}
+          <div className="model-title-line">
+            <span className="model-name">{model.displayName}</span>
+            <span className="model-size mono">{meta.approxSize}</span>
+            {state === "active" && (
+              <span className="badge badge-accent badge-dot model-active-badge">
+                Active
+              </span>
+            )}
+          </div>
+          <span className="model-blurb">{meta.blurb}</span>
         </div>
 
         <div className="model-actions">
@@ -322,9 +413,11 @@ function ModelRow({
           {state === "failed" && (
             <button
               className="btn btn-primary btn-compact"
-              onClick={onDownload}
+              onClick={onRetry}
               disabled={anyInFlight}
+              title={anyInFlight ? "Another download is in progress" : "Retry download"}
             >
+              <RetryIcon />
               Retry
             </button>
           )}
@@ -334,27 +427,41 @@ function ModelRow({
               className="btn btn-primary btn-compact"
               onClick={onDownload}
               disabled={anyInFlight}
+              title={anyInFlight ? "Another download is in progress" : `Download ${model.displayName}`}
             >
               <DownloadIcon />
               Download
             </button>
           )}
 
-          {(state === "available" || state === "active") && (
+          {state === "available" && (
             <>
-              {state === "active" ? (
-                <span className="model-check" title="Active model" aria-label="Active model">
-                  <CheckCircleIcon />
-                </span>
-              ) : (
+              <button
+                className="btn btn-primary btn-compact"
+                onClick={onActivate}
+                disabled={busy || anyInFlight}
+              >
+                Use
+              </button>
+              {model.userInstalled && (
                 <button
-                  className="btn btn-primary btn-compact"
-                  onClick={onActivate}
-                  disabled={busy || anyInFlight}
+                  className="icon-btn"
+                  onClick={onDelete}
+                  disabled={busy}
+                  title="Delete downloaded copy"
+                  aria-label={`Delete ${model.displayName}`}
                 >
-                  Use
+                  <TrashIcon />
                 </button>
               )}
+            </>
+          )}
+
+          {state === "active" && (
+            <>
+              <span className="model-check" title="Active model" aria-label="Active model">
+                <CheckCircleIcon />
+              </span>
               {model.userInstalled && (
                 <button
                   className="icon-btn"
@@ -373,21 +480,53 @@ function ModelRow({
 
       {state === "downloading" && (
         <div className="model-progress">
-          <div className="progress" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
-            <div style={{ width: `${Math.min(100, Math.max(2, pct))}%` }} />
+          <div className="model-progress-head">
+            <span className="model-progress-label">
+              <span className="dl-pulse" aria-hidden="true" />
+              Downloading
+            </span>
+            <span className="model-progress-pct mono">{pct}%</span>
           </div>
-          <div className="model-progress-meta">
+          <div
+            className="progress"
+            role="progressbar"
+            aria-valuenow={pct}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label={`Downloading ${model.displayName}`}
+          >
+            <div className="progress-fill-live" style={{ width: `${barPct}%` }} />
+          </div>
+          <div className="model-progress-meta mono">
             <span>
-              {formatBytes(download?.bytesWritten ?? 0)} /{" "}
+              {formatBytes(download?.bytesWritten ?? 0)}
+              <span className="meta-sep"> / </span>
               {formatBytes(download?.totalBytes ?? 0)}
             </span>
-            <span className="model-progress-pct">{pct}%</span>
+            <span className="muted">
+              {download && download.totalBytes > 0
+                ? `${formatBytes(download.totalBytes - download.bytesWritten)} left`
+                : "Preparing…"}
+            </span>
           </div>
         </div>
       )}
 
       {state === "failed" && download?.error && (
-        <div className="model-error">{download.error}</div>
+        <div className="model-error" role="alert">
+          <span className="model-error-icon" aria-hidden="true">
+            <WarningIcon />
+          </span>
+          <span className="model-error-text">{download.error}</span>
+          <button
+            className="model-error-dismiss"
+            onClick={onDismissError}
+            title="Dismiss"
+            aria-label="Dismiss error"
+          >
+            <CloseIcon />
+          </button>
+        </div>
       )}
     </div>
   );
@@ -473,6 +612,15 @@ function DownloadIcon() {
   );
 }
 
+function RetryIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3.5 12a8.5 8.5 0 1 1 2.6 6.1" />
+      <path d="M3.5 20v-5h5" />
+    </svg>
+  );
+}
+
 function TrashIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
@@ -480,6 +628,14 @@ function TrashIcon() {
       <path d="M9.5 7V5.5a1.5 1.5 0 0 1 1.5-1.5h2a1.5 1.5 0 0 1 1.5 1.5V7" />
       <path d="M6.5 7 7.3 19a2 2 0 0 0 2 1.9h5.4a2 2 0 0 0 2-1.9L17.5 7" />
       <path d="M10 11v6M14 11v6" />
+    </svg>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 6l12 12M18 6 6 18" />
     </svg>
   );
 }
