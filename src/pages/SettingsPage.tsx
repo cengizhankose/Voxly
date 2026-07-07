@@ -48,21 +48,20 @@ export function SettingsPage({ dictation }: { dictation: DictationState }) {
   }, []);
 
   // Persist a single-field change: mutate a copy of the FULL object and send it.
-  const patch = useCallback(
-    async (next: Partial<Settings>) => {
-      setSettings((prev) => {
-        if (!prev) return prev;
-        const merged = { ...prev, ...next };
-        void api.updateSettings(merged).catch(() => {});
-        return merged;
-      });
-    },
-    []
-  );
+  const patch = useCallback(async (next: Partial<Settings>) => {
+    setSettings((prev) => {
+      if (!prev) return prev;
+      const merged = { ...prev, ...next };
+      void api.updateSettings(merged).catch(() => {});
+      return merged;
+    });
+  }, []);
+
+  const activeIndex = TABS.findIndex((t) => t.id === tab);
 
   return (
     <>
-      <header className="page-header">
+      <header className="page-header settings-head">
         <div className="kicker">Preferences</div>
         <h1 className="display">Settings</h1>
         <p className="subtitle">
@@ -71,7 +70,13 @@ export function SettingsPage({ dictation }: { dictation: DictationState }) {
         </p>
       </header>
 
-      <div className="settings-tabs" role="tablist" aria-label="Settings sections">
+      <div
+        className="settings-tabs"
+        role="tablist"
+        aria-label="Settings sections"
+        style={{ ["--tab-index" as string]: activeIndex, ["--tab-count" as string]: TABS.length }}
+      >
+        <span className="settings-tab-indicator" aria-hidden="true" />
         {TABS.map((t) => {
           const Icon = t.icon;
           const active = tab === t.id;
@@ -80,6 +85,7 @@ export function SettingsPage({ dictation }: { dictation: DictationState }) {
               key={t.id}
               role="tab"
               aria-selected={active}
+              tabIndex={active ? 0 : -1}
               className={`settings-tab ${active ? "active" : ""}`}
               onClick={() => setTab(t.id)}
             >
@@ -90,16 +96,46 @@ export function SettingsPage({ dictation }: { dictation: DictationState }) {
         })}
       </div>
 
-      {settings === null ? (
-        <SettingsSkeleton />
-      ) : tab === "general" ? (
-        <GeneralTab settings={settings} patch={patch} />
-      ) : tab === "permissions" ? (
-        <PermissionsTab dictation={dictation} />
-      ) : (
-        <AdvancedTab settings={settings} patch={patch} />
-      )}
+      <div className="settings-body" role="tabpanel">
+        {settings === null ? (
+          <SettingsSkeleton />
+        ) : tab === "general" ? (
+          <GeneralTab settings={settings} patch={patch} />
+        ) : tab === "permissions" ? (
+          <PermissionsTab dictation={dictation} />
+        ) : (
+          <AdvancedTab settings={settings} patch={patch} />
+        )}
+      </div>
     </>
+  );
+}
+
+// ============================================================ GROUP SCAFFOLD
+
+/** A titled, icon-led settings group — the native macOS "section card" unit. */
+function Group({
+  icon,
+  title,
+  caption,
+  children,
+}: {
+  icon: ReactElement;
+  title: string;
+  caption?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="settings-group">
+      <div className="settings-group-head">
+        <span className="settings-group-icon">{icon}</span>
+        <div className="settings-group-heading">
+          <div className="kicker">{title}</div>
+          {caption && <p className="settings-group-caption">{caption}</p>}
+        </div>
+      </div>
+      <div className="card settings-card">{children}</div>
+    </section>
   );
 }
 
@@ -113,6 +149,14 @@ function GeneralTab({
   patch: (next: Partial<Settings>) => Promise<void>;
 }) {
   const [resetting, setResetting] = useState(false);
+  const [clearState, setClearState] = useState<"idle" | "busy" | "done">("idle");
+  const clearTimer = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (clearTimer.current !== null) window.clearTimeout(clearTimer.current);
+    };
+  }, []);
 
   const confirmReset = useCallback(async () => {
     const ok = window.confirm(
@@ -130,104 +174,127 @@ function GeneralTab({
     }
   }, []);
 
+  const clearHistory = useCallback(async () => {
+    const ok = window.confirm(
+      "Clear all saved transcripts?\n\nThis permanently deletes your dictation history. It cannot be undone."
+    );
+    if (!ok) return;
+    setClearState("busy");
+    try {
+      await api.clearHistory();
+      setClearState("done");
+      clearTimer.current = window.setTimeout(() => setClearState("idle"), 2200);
+    } catch {
+      setClearState("idle");
+    }
+  }, []);
+
   return (
     <>
-      <section className="section">
-        <div className="kicker section-title">Startup</div>
-        <div className="card">
-          <div className="row">
-            <div className="row-label">
-              <span>Launch Voxly at login</span>
-              <span className="row-hint">
-                Start dictation in the menu bar automatically when you log in.
-              </span>
-            </div>
-            <Switch
-              checked={settings.launchAtLogin}
-              onChange={(v) => void patch({ launchAtLogin: v })}
-              label="Launch Voxly at login"
-            />
-          </div>
-          <div className="row">
-            <div className="row-label">
-              <span>Show main window when launched</span>
-              <span className="row-hint">
-                Open this window on launch instead of staying only in the menu bar.
-              </span>
-            </div>
-            <Switch
-              checked={settings.showWindowOnLaunch}
-              onChange={(v) => void patch({ showWindowOnLaunch: v })}
-              label="Show main window when launched"
-            />
-          </div>
-        </div>
-      </section>
+      <Group icon={<PowerIcon />} title="Startup" caption="What Voxly does when your Mac boots up.">
+        <Row
+          label="Launch Voxly at login"
+          hint="Start dictation in the menu bar automatically when you log in."
+        >
+          <Switch
+            checked={settings.launchAtLogin}
+            onChange={(v) => void patch({ launchAtLogin: v })}
+            label="Launch Voxly at login"
+          />
+        </Row>
+        <Row
+          label="Show main window when launched"
+          hint="Open this window on launch instead of staying only in the menu bar."
+        >
+          <Switch
+            checked={settings.showWindowOnLaunch}
+            onChange={(v) => void patch({ showWindowOnLaunch: v })}
+            label="Show main window when launched"
+          />
+        </Row>
+      </Group>
 
-      <section className="section">
-        <div className="kicker section-title">Hotkey</div>
-        <div className="card">
-          <div className="row">
-            <div className="row-label">
-              <span>Toggle dictation</span>
-              <span className="row-hint">
-                Press this shortcut anywhere to start and stop recording.
-              </span>
-            </div>
-            <HotkeyRecorder
-              value={settings.hotkey}
-              onChange={(hotkey) => void patch({ hotkey })}
-            />
-          </div>
-        </div>
-      </section>
+      <Group icon={<KeyIcon />} title="Hotkey" caption="The global shortcut that starts and stops recording.">
+        <Row
+          label="Toggle dictation"
+          hint="Press this shortcut anywhere to start and stop recording."
+        >
+          <HotkeyRecorder
+            value={settings.hotkey}
+            onChange={(hotkey) => void patch({ hotkey })}
+          />
+        </Row>
+      </Group>
 
-      <section className="section">
-        <div className="kicker section-title">History</div>
-        <div className="card">
-          <div className="row">
-            <div className="row-label">
-              <span>Retention</span>
-              <span className="row-hint">
-                How long transcripts are kept before they're pruned automatically.
-              </span>
-            </div>
-            <Segmented
-              options={RETENTION_OPTIONS.map((o) => ({
-                value: o.days,
-                label: o.label,
-              }))}
-              value={settings.historyRetentionDays}
-              onChange={(days) => void patch({ historyRetentionDays: days })}
-              ariaLabel="History retention"
-            />
-          </div>
-        </div>
-      </section>
+      <Group icon={<ClockIcon />} title="History" caption="How long dictations are stored on this Mac.">
+        <Row
+          label="Retention"
+          hint="How long transcripts are kept before they're pruned automatically."
+        >
+          <Segmented
+            options={RETENTION_OPTIONS.map((o) => ({ value: o.days, label: o.label }))}
+            value={settings.historyRetentionDays}
+            onChange={(days) => void patch({ historyRetentionDays: days })}
+            ariaLabel="History retention"
+          />
+        </Row>
+        <Row
+          label="Clear history now"
+          hint="Immediately delete every saved transcript. This cannot be undone."
+        >
+          <button
+            className="btn btn-ghost btn-compact settings-danger"
+            onClick={() => void clearHistory()}
+            disabled={clearState === "busy"}
+          >
+            {clearState === "busy" ? (
+              <>
+                <Spinner />
+                Clearing…
+              </>
+            ) : clearState === "done" ? (
+              <>
+                <CheckIcon />
+                Cleared
+              </>
+            ) : (
+              <>
+                <TrashIcon />
+                Clear
+              </>
+            )}
+          </button>
+        </Row>
+      </Group>
 
-      <section className="section">
-        <div className="kicker section-title">Troubleshooting</div>
-        <div className="card">
-          <div className="row">
-            <div className="row-label">
-              <span>Reset Accessibility permission</span>
-              <span className="row-hint">
-                Use if Voxly says &ldquo;Accessibility not granted&rdquo; even after
-                you've enabled it. Wipes the TCC entry and relaunches &mdash; then
-                re-add Voxly in System Settings.
-              </span>
-            </div>
-            <button
-              className="btn btn-ghost btn-compact settings-danger"
-              onClick={() => void confirmReset()}
-              disabled={resetting}
-            >
-              <ResetIcon />
-              {resetting ? "Relaunching…" : "Reset & Relaunch"}
-            </button>
-          </div>
-        </div>
-      </section>
+      <Group
+        icon={<WrenchIcon />}
+        title="Troubleshooting"
+        caption="Recovery tools for when a permission gets stuck."
+      >
+        <Row
+          label="Reset Accessibility permission"
+          hint="Use if Voxly says “Accessibility not granted” even after you've enabled it. Wipes the TCC entry and relaunches — then re-add Voxly in System Settings."
+        >
+          <button
+            className="btn btn-ghost btn-compact settings-danger"
+            onClick={() => void confirmReset()}
+            disabled={resetting}
+          >
+            {resetting ? (
+              <>
+                <Spinner />
+                Relaunching…
+              </>
+            ) : (
+              <>
+                <ResetIcon />
+                Reset &amp; Relaunch
+              </>
+            )}
+          </button>
+        </Row>
+      </Group>
     </>
   );
 }
@@ -273,10 +340,19 @@ function PermissionsTab({ dictation }: { dictation: DictationState }) {
     void api.requestAccessibility().catch(() => {});
   }, []);
 
+  const grantedCount = Number(micGranted) + Number(accessibilityGranted);
+
   return (
-    <section className="section">
-      <div className="kicker section-title">System access</div>
-      <div className="card">
+    <>
+      <Group
+        icon={<ShieldIcon />}
+        title="System access"
+        caption={
+          grantedCount === 2
+            ? "All set — Voxly has everything it needs."
+            : `${grantedCount} of 2 granted — finish the steps below.`
+        }
+      >
         <PermissionRow
           icon={<MicIcon />}
           label="Microphone"
@@ -291,34 +367,38 @@ function PermissionsTab({ dictation }: { dictation: DictationState }) {
           granted={accessibilityGranted}
           onGrant={grantAccessibility}
         />
-      </div>
+      </Group>
 
       {!accessibilityGranted && (
-        <div className="settings-note" style={{ alignItems: "center" }}>
-          <InfoIcon />
-          <p style={{ flex: 1 }}>
+        <div className="settings-note settings-note-warn">
+          <span className="settings-note-icon">
+            <AlertIcon />
+          </span>
+          <p>
             Enabled Voxly under Accessibility but it still shows “Grant”? macOS
             only applies the permission after the app relaunches.
           </p>
           <button
-            className="btn btn-ghost btn-compact"
-            style={{ flexShrink: 0 }}
+            className="btn btn-ghost btn-compact settings-note-action"
             onClick={() => void api.relaunchApp()}
           >
+            <RelaunchIcon />
             Quit &amp; Reopen
           </button>
         </div>
       )}
 
       <div className="settings-note">
-        <InfoIcon />
+        <span className="settings-note-icon">
+          <InfoIcon />
+        </span>
         <p>
           Microphone is required to record. Accessibility lets Voxly paste the
           transcript into the active app via a synthesized <Kbd>&#8984;</Kbd>
           <Kbd>V</Kbd>; without it, text is copied to the clipboard only.
         </p>
       </div>
-    </section>
+    </>
   );
 }
 
@@ -350,8 +430,9 @@ function PermissionRow({
           Granted
         </span>
       ) : (
-        <button className="btn btn-primary btn-compact" onClick={onGrant}>
+        <button className="btn btn-primary btn-compact perm-grant" onClick={onGrant}>
           Grant
+          <ArrowIcon />
         </button>
       )}
     </div>
@@ -403,91 +484,112 @@ function AdvancedTab({
 
   return (
     <>
-      <section className="section">
-        <div className="kicker section-title">Output</div>
-        <div className="card">
-          <div className="row settings-row-stacked">
-            <div className="row-label">
-              <span>Paste mode</span>
-              <span className="row-hint">
-                {PASTE_MODES.find((m) => m.value === settings.pasteMode)?.hint}{" "}
-                Voxly falls back to the clipboard if Accessibility isn't granted.
-              </span>
-            </div>
-            <Segmented
-              options={PASTE_MODES.map((m) => ({
-                value: m.value,
-                label: m.label,
-              }))}
-              value={settings.pasteMode}
-              onChange={(v) => void patch({ pasteMode: v })}
-              ariaLabel="Paste mode"
-            />
+      <Group icon={<PasteIcon />} title="Output" caption="Where a finished transcript goes.">
+        <div className="row settings-row-stacked">
+          <div className="row-label">
+            <span>Paste mode</span>
+            <span className="row-hint">
+              {PASTE_MODES.find((m) => m.value === settings.pasteMode)?.hint}{" "}
+              Voxly falls back to the clipboard if Accessibility isn't granted.
+            </span>
           </div>
+          <Segmented
+            options={PASTE_MODES.map((m) => ({ value: m.value, label: m.label }))}
+            value={settings.pasteMode}
+            onChange={(v) => void patch({ pasteMode: v })}
+            ariaLabel="Paste mode"
+          />
         </div>
-      </section>
+      </Group>
 
-      <section className="section">
-        <div className="kicker section-title">Recognition</div>
-        <div className="card">
-          <div className="row">
-            <div className="row-label">
-              <span>Language</span>
-              <span className="row-hint">
-                Auto-detect works well for most speech. Pick a language to force
-                it when detection struggles.
-              </span>
-            </div>
-            <div className="settings-select">
-              <select
-                value={settings.languageOverride}
-                onChange={(e) => void patch({ languageOverride: e.target.value })}
-                aria-label="Recognition language"
-              >
-                {LANGUAGES.map((l) => (
-                  <option key={l.code} value={l.code}>
-                    {l.label}
-                  </option>
-                ))}
-              </select>
-              <ChevronIcon />
-            </div>
-          </div>
-        </div>
-      </section>
+      <Group icon={<GlobeIcon />} title="Recognition" caption="How Voxly interprets your speech.">
+        <Row
+          label="Language"
+          hint="Auto-detect works well for most speech. Pick a language to force it when detection struggles."
+        >
+          <SelectField
+            value={settings.languageOverride}
+            onChange={(v) => void patch({ languageOverride: v })}
+            ariaLabel="Recognition language"
+          >
+            {LANGUAGES.map((l) => (
+              <option key={l.code} value={l.code}>
+                {l.label}
+              </option>
+            ))}
+          </SelectField>
+        </Row>
+      </Group>
 
-      <section className="section">
-        <div className="kicker section-title">Input</div>
-        <div className="card">
-          <div className="row">
-            <div className="row-label">
-              <span>Microphone</span>
-              <span className="row-hint">
-                Applies to the next recording. &ldquo;System Default&rdquo; follows
-                your macOS Sound settings.
-              </span>
-            </div>
-            <div className="settings-select">
-              <select
-                value={settings.selectedInputDeviceUid}
-                onChange={(e) =>
-                  void patch({ selectedInputDeviceUid: e.target.value })
-                }
-                aria-label="Microphone input device"
-              >
-                <option value={SYSTEM_DEFAULT_MIC}>System Default</option>
-                {devices.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                  </option>
-                ))}
-              </select>
-              <ChevronIcon />
-            </div>
-          </div>
-        </div>
-      </section>
+      <Group icon={<MicIcon />} title="Input" caption="Which microphone Voxly records from.">
+        <Row
+          label="Microphone"
+          hint="Applies to the next recording. “System Default” follows your macOS Sound settings."
+        >
+          <SelectField
+            value={settings.selectedInputDeviceUid}
+            onChange={(v) => void patch({ selectedInputDeviceUid: v })}
+            ariaLabel="Microphone input device"
+          >
+            <option value={SYSTEM_DEFAULT_MIC}>System Default</option>
+            {devices.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+              </option>
+            ))}
+          </SelectField>
+        </Row>
+      </Group>
     </>
+  );
+}
+
+// ============================================================ ROW
+
+function Row({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="row">
+      <div className="row-label">
+        <span>{label}</span>
+        <span className="row-hint">{hint}</span>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+// ============================================================ SELECT FIELD
+
+function SelectField({
+  value,
+  onChange,
+  ariaLabel,
+  children,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  ariaLabel: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="settings-select">
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-label={ariaLabel}
+      >
+        {children}
+      </select>
+      <ChevronIcon />
+    </div>
   );
 }
 
@@ -718,7 +820,11 @@ function HotkeyRecorder({
           <span className="hotkey-empty">Click to set</span>
         )}
       </button>
-      {error && <span className="hotkey-error">{error}</span>}
+      {error ? (
+        <span className="hotkey-error">{error}</span>
+      ) : (
+        <span className="hotkey-tip">{recording ? "Esc to cancel" : "Click, then press a combo"}</span>
+      )}
     </div>
   );
 }
@@ -729,9 +835,21 @@ function SettingsSkeleton() {
   return (
     <div className="settings-skeleton" aria-busy="true" aria-live="polite">
       {[0, 1, 2].map((i) => (
-        <div key={i} className="settings-skeleton-card">
-          <div className="skeleton-line" />
-          <div className="skeleton-line short" />
+        <div key={i} className="settings-skeleton-group">
+          <div className="settings-skeleton-head">
+            <div className="skeleton-chip" />
+            <div className="skeleton-line short" />
+          </div>
+          <div className="settings-skeleton-card">
+            <div className="skeleton-row">
+              <div className="skeleton-line" />
+              <div className="skeleton-pill" />
+            </div>
+            <div className="skeleton-row">
+              <div className="skeleton-line mid" />
+              <div className="skeleton-pill" />
+            </div>
+          </div>
         </div>
       ))}
     </div>
@@ -742,6 +860,10 @@ function SettingsSkeleton() {
 
 function Kbd({ children }: { children: ReactNode }) {
   return <kbd className="inline-kbd">{children}</kbd>;
+}
+
+function Spinner() {
+  return <span className="settings-spinner" aria-hidden="true" />;
 }
 
 // ============================================================ ICONS (inline SVG)
@@ -826,6 +948,99 @@ function InfoIcon() {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="9" />
       <path d="M12 11v5M12 8h.01" />
+    </svg>
+  );
+}
+
+function AlertIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />
+      <path d="M12 9v4M12 17h.01" />
+    </svg>
+  );
+}
+
+function PowerIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3v9" />
+      <path d="M6.6 6.6a8 8 0 1 0 10.8 0" />
+    </svg>
+  );
+}
+
+function KeyIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="7.5" cy="15.5" r="4" />
+      <path d="m10.5 12.5 8-8" />
+      <path d="m16 5 3 3M14 7l2.5 2.5" />
+    </svg>
+  );
+}
+
+function ClockIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3.5 2" />
+    </svg>
+  );
+}
+
+function WrenchIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14.7 6.3a4 4 0 0 0-5.2 5L4 16.8V20h3.2l5.5-5.5a4 4 0 0 0 5-5.2l-2.6 2.6-2.4-.6-.6-2.4Z" />
+    </svg>
+  );
+}
+
+function PasteIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="6" y="4" width="12" height="17" rx="2" />
+      <path d="M9 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1" />
+      <path d="M9 10h6M9 14h6" />
+    </svg>
+  );
+}
+
+function GlobeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M3 12h18" />
+      <path d="M12 3c2.5 2.5 3.8 5.7 3.8 9s-1.3 6.5-3.8 9c-2.5-2.5-3.8-5.7-3.8-9S9.5 5.5 12 3Z" />
+    </svg>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 7h16" />
+      <path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+      <path d="M6 7v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7" />
+      <path d="M10 11v6M14 11v6" />
+    </svg>
+  );
+}
+
+function RelaunchIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 12a9 9 0 1 1-3.3-7" />
+      <path d="M21 4v5h-5" />
+    </svg>
+  );
+}
+
+function ArrowIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M5 12h13M13 6l6 6-6 6" />
     </svg>
   );
 }
