@@ -9,7 +9,7 @@ use crate::storage::{Settings, TranscriptionRecord};
 use serde::Serialize;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -202,13 +202,14 @@ pub fn complete_onboarding(app: AppHandle) {
     st.settings.lock().save();
 }
 
-/// Quit and reopen the app. macOS only applies a freshly-granted Accessibility
-/// permission after the process relaunches, so this is the "I granted it but it
-/// isn't detected yet" fix. Re-execs the same on-disk binary (identity stable),
-/// which works for both dev and bundled builds.
+/// Quit and reopen the app so a freshly-granted Accessibility permission takes
+/// effect. In a bundled build this is a real process restart. In `tauri dev`
+/// a restart would tear down the vite dev server (owned by the tauri-dev CLI)
+/// and leave a blank window, so there we just reload the webview — the 1.2s
+/// permission poll picks up the grant live without a restart.
 #[tauri::command]
 pub fn relaunch_app(app: AppHandle) {
-    app.restart();
+    relaunch(&app);
 }
 
 /// Wipe Voxly's Accessibility TCC entry, open System Settings, then relaunch —
@@ -220,5 +221,19 @@ pub fn reset_accessibility_and_relaunch(app: AppHandle) {
         .args(["reset", "Accessibility", "com.voxly.app"])
         .spawn();
     permissions::open_accessibility_settings();
-    app.restart();
+    relaunch(&app);
+}
+
+/// Restart the app (production) or reload the webview (dev — see `relaunch_app`).
+fn relaunch(app: &AppHandle) {
+    #[cfg(debug_assertions)]
+    {
+        if let Some(win) = app.get_webview_window("main") {
+            let _ = win.eval("window.location.reload()");
+        }
+    }
+    #[cfg(not(debug_assertions))]
+    {
+        app.restart();
+    }
 }
