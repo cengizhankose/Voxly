@@ -142,6 +142,21 @@ final class DictationController: ObservableObject {
                 return
             }
 
+            // Whisper hallucinates on near-silent audio — famously emitting
+            // Turkish subtitle credits and other training-data debris — and
+            // language auto-detection then latches onto the hallucination.
+            // Gate on signal energy so silence/room noise is rejected before
+            // it ever reaches the model. Typical speech RMS is 0.02–0.1;
+            // quiet room noise sits well below 0.004.
+            let rms = sqrt(audioData.reduce(0) { $0 + $1 * $1 } / Float(audioData.count))
+            log.notice("Audio RMS: \(rms, format: .fixed(precision: 5))")
+            guard rms >= 0.004 else {
+                statusMessage = "No speech detected"
+                signalNoSpeech()
+                isTranscribing = false
+                return
+            }
+
             let langHint: String? = (languageOverride == "auto" || languageOverride.isEmpty) ? nil : languageOverride
             let raw = await whisperEngine.transcribe(audioData: audioData, language: langHint)
             let text = Self.cleanTranscript(raw)
