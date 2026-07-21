@@ -87,15 +87,22 @@ struct MenuBarView: View {
         .voxlyCard(padding: 12)
     }
 
+    // Deliberately NOT a `KeyboardShortcuts.Recorder`: focusing a recorder sets
+    // `KeyboardShortcuts.isPaused = true`, and the menu-bar panel is a
+    // non-activating window that never resigns key on dismiss — so the pause
+    // sticks and the global hotkey stays dead until relaunch. Rebinding lives
+    // in Settings/Onboarding, whose real windows unpause correctly.
     private var hotkeyRow: some View {
         HStack {
             Text("Hotkey")
                 .font(Theme.mono(11))
                 .foregroundColor(Theme.muted)
             Spacer()
-            KeyboardShortcuts.Recorder(for: .toggleDictation)
-                .frame(maxWidth: 160)
+            Text(KeyboardShortcuts.getShortcut(for: .toggleDictation).map(String.init(describing:)) ?? "None")
+                .font(Theme.mono(12, .semibold))
+                .foregroundColor(Theme.text)
         }
+        .help("Change the hotkey in Settings — Open Voxly → Settings")
     }
 
     private var footer: some View {
