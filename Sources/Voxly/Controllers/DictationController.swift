@@ -11,6 +11,11 @@ final class DictationController: ObservableObject {
     @Published private(set) var statusMessage = "Loading model..."
     @Published private(set) var lastTranscript = ""
     @Published private(set) var currentModelName: String = ModelSize.base.rawValue
+    /// Briefly true after a cycle that produced no usable speech, so the menu
+    /// bar icon can signal the miss — otherwise an empty transcription is
+    /// indistinguishable from the app being broken (status text lives inside
+    /// the closed popover).
+    @Published private(set) var lastCycleProducedNoSpeech = false
 
     /// Paste behaviour applied at the end of a transcription.
     var pasteMode: PasteMode = .paste
@@ -108,6 +113,7 @@ final class DictationController: ObservableObject {
             try audioRecorder.start()
             isRecording = true
             statusMessage = "Recording..."
+            log.notice("Recording started")
         } catch {
             log.error("Failed to start recording: \(error.localizedDescription, privacy: .public)")
             statusMessage = "Failed to start recording: \(error.localizedDescription)"
@@ -119,7 +125,7 @@ final class DictationController: ObservableObject {
         isRecording = false
         statusMessage = "Transcribing..."
         isTranscribing = true
-        log.info("Recording stopped, starting transcription")
+        log.notice("Recording stopped, starting transcription")
 
         let startedAt = recordingStartedAt ?? Date()
         let duration = Date().timeIntervalSince(startedAt)
@@ -127,7 +133,7 @@ final class DictationController: ObservableObject {
 
         Task {
             let audioData = audioRecorder.getAudioData()
-            log.info("Captured \(audioData.count) audio samples (~\(Double(audioData.count) / 16000.0, format: .fixed(precision: 2))s)")
+            log.notice("Captured \(audioData.count) audio samples (~\(Double(audioData.count) / 16000.0, format: .fixed(precision: 2))s)")
 
             guard !audioData.isEmpty else {
                 log.error("No audio data captured")
@@ -139,10 +145,11 @@ final class DictationController: ObservableObject {
             let langHint: String? = (languageOverride == "auto" || languageOverride.isEmpty) ? nil : languageOverride
             let raw = await whisperEngine.transcribe(audioData: audioData, language: langHint)
             let text = Self.cleanTranscript(raw)
-            log.info("Transcription length raw=\(raw.count) cleaned=\(text.count)")
+            log.notice("Transcription length raw=\(raw.count) cleaned=\(text.count)")
 
             if text.isEmpty {
                 statusMessage = "No speech detected"
+                signalNoSpeech()
             } else {
                 lastTranscript = text
 
@@ -150,6 +157,17 @@ final class DictationController: ObservableObject {
                 onTranscript?(text, duration, target, langHint, currentModelName)
             }
             isTranscribing = false
+        }
+    }
+
+    /// Audible + visual cue that the cycle completed but yielded nothing:
+    /// system sound now, `mic.slash` menu bar icon for a few seconds.
+    private func signalNoSpeech() {
+        NSSound(named: "Basso")?.play()
+        lastCycleProducedNoSpeech = true
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            lastCycleProducedNoSpeech = false
         }
     }
 
@@ -161,7 +179,7 @@ final class DictationController: ObservableObject {
         // Match `[...]` or `(...)` whose contents are letters / spaces /
         // underscores / hyphens only (avoids eating real punctuation inside
         // real transcripts like "I said (loudly)").
-        let pattern = #"[\[\(]\s*[A-Za-z _\-]+\s*[\]\)]"#
+        let pattern = #"[\[\(\*]\s*[A-Za-z _\-]+\s*[\]\)\*]"#
         let cleaned = s.replacingOccurrences(
             of: pattern,
             with: "",
