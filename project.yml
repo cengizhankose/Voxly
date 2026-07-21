@@ -30,6 +30,13 @@ targets:
         INFOPLIST_FILE: Support/Info.plist
         CODE_SIGN_ENTITLEMENTS: Support/Voxly.entitlements
         CODE_SIGN_IDENTITY: "-"
+        # Ad-hoc signatures get a fresh CDHash every build, and TCC binds
+        # grants (Accessibility!) to the designated requirement captured at
+        # grant time — so by default every rebuild silently invalidates the
+        # grant. Signing with an explicit identifier-only designated
+        # requirement gives TCC a stable anchor every future build satisfies.
+        # Local dev only; use a real signing identity for distribution.
+        OTHER_CODE_SIGN_FLAGS: "--requirements '=designated => identifier \"com.voxly.app\"'"
         CODE_SIGN_STYLE: Manual
         ENABLE_HARDENED_RUNTIME: false
         SWIFT_OBJC_BRIDGING_HEADER: Sources/Voxly/Voxly-Bridging-Header.h
@@ -50,6 +57,7 @@ targets:
     info:
       path: Support/Info.plist
       properties:
+        LSUIElement: true
         NSMicrophoneUsageDescription: "Voxly needs microphone access to transcribe your speech to text."
         NSHumanReadableCopyright: "Copyright 2026 Voxly. All rights reserved."
     entitlements:

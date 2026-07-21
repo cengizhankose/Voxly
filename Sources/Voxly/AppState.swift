@@ -134,12 +134,18 @@ final class AppState: ObservableObject {
 
     // MARK: hotkey
 
+    // Logs here are `notice`-level on purpose: macOS persists notice and above,
+    // while `info` is memory-only — invisible after the fact. This is the
+    // primary diagnostic for "hotkey pressed but nothing happened" reports.
     private func setupHotkey() {
         KeyboardShortcuts.onKeyDown(for: .toggleDictation) { [weak self] in
+            log.notice("Hotkey fired")
             Task { @MainActor in
                 self?.toggleDictation()
             }
         }
+        let shortcut = KeyboardShortcuts.getShortcut(for: .toggleDictation)
+        log.notice("Hotkey handler registered; shortcut=\(shortcut.map(String.init(describing:)) ?? "nil", privacy: .public)")
     }
 
     func toggleDictation() {
@@ -200,9 +206,14 @@ final class AppState: ObservableObject {
         } catch {
             log.error("Relaunch helper failed: \(error.localizedDescription, privacy: .public)")
         }
-        // Give Settings + helper a moment to register, then terminate.
+        // Give Settings + helper a moment to register, then exit. This
+        // deliberately avoids `NSApp.terminate`: SwiftUI can defer or swallow
+        // it while the popover's confirmation dialog is unwinding, leaving the
+        // app running and this flow stuck. There is no state to tear down, and
+        // the detached helper above relaunches the bundle.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-            NSApp.terminate(nil)
+            log.notice("Reset flow exiting for relaunch")
+            exit(0)
         }
     }
 
