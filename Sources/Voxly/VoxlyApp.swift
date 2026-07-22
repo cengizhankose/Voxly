@@ -11,15 +11,11 @@ struct VoxlyApp: App {
     @StateObject private var appState = AppState()
 
     var body: some Scene {
-        Window("Voxly", id: "main") {
-            MainWindowView()
-                .environmentObject(appState)
-                .tint(Theme.accent)
-        }
-        .commands {
-            // Hide the default "New" item — Voxly has no document model.
-            CommandGroup(replacing: .newItem) { }
-        }
+        windowScene
+            .commands {
+                // Hide the default "New" item — Voxly has no document model.
+                CommandGroup(replacing: .newItem) { }
+            }
 
         Settings {
             SettingsView()
@@ -27,6 +23,18 @@ struct VoxlyApp: App {
                 .tint(Theme.accent)
         }
 
+        menuBarExtra
+    }
+
+    private var windowScene: some Scene {
+        Window("Voxly", id: "main") {
+            MainWindowView()
+                .environmentObject(appState)
+                .tint(Theme.accent)
+        }
+    }
+
+    private var menuBarExtra: some Scene {
         MenuBarExtra {
             MenuBarView()
                 .environmentObject(appState)
@@ -34,10 +42,16 @@ struct VoxlyApp: App {
             Label {
                 Text("Voxly")
             } icon: {
-                Image(systemName: appState.isRecording ? "mic.fill" : "mic")
+                Image(systemName: menuBarSymbol)
             }
         }
         .menuBarExtraStyle(.window)
+    }
+
+    private var menuBarSymbol: String {
+        if appState.isRecording { return "mic.fill" }
+        if appState.dictation.lastCycleProducedNoSpeech { return "mic.slash" }
+        return "mic"
     }
 }
 

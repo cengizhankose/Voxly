@@ -22,50 +22,52 @@ Build / run:
 ```bash
 xcodebuild -scheme Voxly -configuration Release build
 xcodebuild -scheme Voxly -configuration Debug build
-open build/Release/Voxly.app   # path depends on DerivedData; check build output
+# app lands in DerivedData; locate with:
+xcodebuild -scheme Voxly -configuration Debug -showBuildSettings | grep BUILT_PRODUCTS_DIR
 ```
 
-Re-run `xcodegen generate` after editing `project.yml` or adding/removing files in `Sources/Voxly/`. The script `build-whisper-xcframework.sh` is a no-op if `Frameworks/whisper.xcframework` exists — `rm -rf` it to rebuild (e.g. to bump `WHISPER_TAG`).
+Re-run `xcodegen generate` after editing `project.yml` or adding/removing files under `Sources/Voxly/`. The whisper build script is a no-op if `Frameworks/whisper.xcframework` exists — `rm -rf` it to rebuild. If CMake fails with `make: /Applications/Xcode: No such file or directory`, the Xcode path contains a space; rerun with `CMAKE_GENERATOR=Ninja` (needs `brew install ninja`).
 
-There is no test target, no linter, and no formatter configured. `npm run build && npm test` from the previous CLAUDE.md does not apply — this is not a Node project.
+There is no test target, no linter, and no formatter configured.
 
 ## Architecture
 
-`VoxlyApp.swift` is a `MenuBarExtra` SwiftUI scene with `LSUIElement=true` (no dock icon). It owns a single `@StateObject AppState`, which is `@MainActor` and the only place state mutates.
+Sources are grouped under `Sources/Voxly/`:
 
-`AppState` composes four collaborators and orchestrates the dictation flow end-to-end:
+- `VoxlyApp.swift` — three scenes: `Window("Voxly", id: "main")` (history/models/settings/about), `Settings`, and a `MenuBarExtra` (`.window` style). `LSUIElement=true`: no Dock icon, no Cmd+Tab entry. The main window is closed at launch by `App/AppDelegate.swift` unless the "Show main window when launched" setting is on (`.defaultLaunchBehavior(.suppressed)` would be cleaner but needs macOS 15; target is 13). Onboarding runs as a sheet over the main window on first launch.
+- `AppState.swift` — `@MainActor` root object; owns permissions state and composes the collaborators below. Child `objectWillChange` events are re-forwarded so views observing only `appState` stay reactive.
+- `Controllers/DictationController.swift` — the record → transcribe → deliver pipeline and its state (`isRecording`, `isTranscribing`, `statusMessage`). Rejects near-silent audio (RMS < 0.004) before it reaches whisper — silence makes whisper hallucinate (typically Turkish subtitle credits from its training data), so this gate is load-bearing. Strips whisper's non-speech annotations (`[Music]`, `(silence)`, `*Sings*`). Empty results trigger a sound + transient `mic.slash` menu bar icon.
+- `AudioRecorder.swift` — `AVAudioEngine` input tap → `AVAudioConverter` → 16 kHz mono Float32 PCM under an `NSLock`. whisper.cpp requires exactly this format.
+- `WhisperEngine.swift` — Swift `actor` wrapping `whisper_context*`; never store the `OpaquePointer` outside the actor.
+- `TextInserter.swift` — saves clipboard, writes transcript, synthesizes Cmd+V via `CGEvent`, restores clipboard 300ms later. The 50ms `usleep` before posting is load-bearing.
+- `PermissionsManager.swift` — mic (`AVCaptureDevice`) + Accessibility (`AXIsProcessTrusted…`), plus `tccutil reset` recovery for stale grants.
+- `Stores/` — `SettingsStore` (UserDefaults-backed: paste mode, language override, input device, model size, `showWindowOnLaunch`…), `HistoryStore` (history.json in App Support), `ModelDownloader`.
+- `Models/` — `ModelSize`/`ModelCatalog`/`ModelLocator` (model files: bundled `ggml-base.bin`, user-installed under `~/Library/Application Support/Voxly/models/ggml-<size>.bin`), `AppPaths`, `TranscriptionRecord`, `PasteMode`.
+- `Views/` — `Main/` (NavigationSplitView shell), `Settings/`, `Onboarding/`, `DesignSystem/` (`Theme`, shared components), plus `MenuBarView.swift` (popover).
 
-- `AudioRecorder` — `AVAudioEngine` input tap → `AVAudioConverter` → 16 kHz mono Float32 PCM, accumulated into `[Float]` under an `NSLock`. whisper.cpp requires exactly this format; do not change without updating the engine call.
-- `WhisperEngine` — Swift `actor` wrapping the C `whisper_context*`. `loadModel(path:)` then `transcribe(audioData:)` returning the joined segment text. Threads = `activeProcessorCount - 2` (min 1). `language = nil` enables auto-detect.
-- `TextInserter` — saves the current `NSPasteboard` contents, writes the transcript, posts a synthesized Cmd+V via `CGEvent` to `.cghidEventTap`, then restores the original clipboard 300ms later. The 50ms `usleep` before posting is load-bearing — without it the paste races the pasteboard write.
-- `PermissionsManager` — microphone via `AVCaptureDevice.requestAccess`, Accessibility via `AXIsProcessTrustedWithOptions`. The Accessibility prompt is system-modal and only appears once per process; subsequent grants require the user to toggle in System Settings.
+## Hotkey — critical pitfall
 
-The dictation pipeline (`AppState.toggleDictation`): hotkey fires → `audioRecorder.start()` → user speaks → hotkey fires again → `audioRecorder.stop()` → `whisperEngine.transcribe()` on the actor → if Accessibility granted, `textInserter.insertText` synthesizes paste; otherwise `copyToClipboard` only and the status message tells the user to enable Accessibility.
+Registered via the `KeyboardShortcuts` SPM package; name `toggleDictation` (default ⌥D) defined in `VoxlyApp.swift`. **Never place a `KeyboardShortcuts.Recorder` inside the MenuBarExtra popover**: focusing a recorder sets the library-internal `isPaused = true`, and the popover is a non-activating panel that never resigns key on dismiss — the pause sticks and the global hotkey stays dead until relaunch, with no error anywhere. Recorders are only safe in real windows (Settings pane, Onboarding). The popover shows the shortcut read-only.
 
-Hotkey is registered via the `KeyboardShortcuts` SPM package (sindresorhus). The shortcut name `toggleDictation` is defined as an extension on `KeyboardShortcuts.Name` in `VoxlyApp.swift` with default Option+D; the menu bar UI exposes a `KeyboardShortcuts.Recorder` to rebind it (persisted by the package automatically).
+## Signing & TCC — critical pitfall
+
+`project.yml` signs ad-hoc (`CODE_SIGN_IDENTITY: "-"`) **plus** `OTHER_CODE_SIGN_FLAGS` stamping an identifier-only designated requirement (`identifier "com.voxly.app"`). Without this, every rebuild changes the CDHash and macOS silently voids the Accessibility grant — paste degrades to clipboard-only with no error. Keep the flag; use a real signing identity for distribution. Sandboxing must stay off: `CGEvent.post` and the Accessibility API are incompatible with the App Sandbox. `OTHER_LDFLAGS: -lc++` is required for whisper.cpp's C++ symbols.
+
+Quit is forced via `applicationShouldTerminate → .terminateNow` in the AppDelegate — SwiftUI's adaptor delegate has been observed swallowing `NSApp.terminate` from the popover. The accessibility-reset flow uses `exit(0)` for the same reason.
+
+## Logging discipline
+
+`Logger(subsystem: "com.voxly.app", …)` throughout. macOS persists **notice and above**; `info` is memory-only and invisible after the fact. Pipeline breadcrumbs (hotkey registered/fired, recording start/stop, sample counts, RMS, transcription lengths) are deliberately `notice` — keep them that way; they are the only way to debug "pressed the hotkey, nothing happened" reports:
+
+```bash
+log show --predicate 'subsystem == "com.voxly.app"' --last 10m
+```
 
 ## whisper.cpp integration
 
-Swift ↔ C bridge: `Voxly-Bridging-Header.h` includes `whisper.h`. `project.yml` wires `SWIFT_OBJC_BRIDGING_HEADER` and adds `Frameworks/whisper.xcframework/macos-arm64_x86_64/Headers` to `HEADER_SEARCH_PATHS`. The framework is `embed: true`.
+Bridge: `Voxly-Bridging-Header.h` includes `whisper.h`; `project.yml` wires `SWIFT_OBJC_BRIDGING_HEADER` and `HEADER_SEARCH_PATHS` at `Frameworks/whisper.xcframework/macos-arm64/Headers` (the build script produces an arm64-only slice — keep the path in sync if the script changes). Metal kernels are embedded in the static lib; no separate `.metallib` is required at runtime. Threads = `activeProcessorCount - 2` (min 1). Language comes from the Settings "Recognition" picker ("auto" → whisper auto-detect; auto-detect is only trustworthy because of the RMS silence gate).
 
-**Slice path caveat:** the build script builds arm64 only (`-DCMAKE_OSX_ARCHITECTURES="arm64"`), so `xcodebuild -create-xcframework` produces a `macos-arm64/Headers` slice — not `macos-arm64_x86_64/Headers` as referenced in `project.yml`. If a fresh `xcodegen generate` produces "whisper.h not found" errors, either fix the path in `project.yml` to match the actual slice produced, or extend the build script to also build x86_64 and lipo before `-create-xcframework`. Apple Silicon is the only intended target today.
+## Conventions
 
-Metal: `GGML_METAL=ON` in the cmake build. The script copies any `*.metallib` into `Resources/` so the framework's Metal kernels can be loaded at runtime. `Resources/*.metallib` is gitignored — it is regenerated by the whisper build.
-
-Model lookup order in `AppState.modelFilePath()`:
-1. `Bundle.main.path(forResource: "ggml-base", ofType: "bin")` — i.e. shipped inside the .app
-2. `~/Library/Application Support/Voxly/ggml-base.bin` — fallback for dev/user-installed models
-
-`download-model.sh` writes to `Resources/ggml-base.bin`, which xcodegen bundles via the `resources: - Resources` declaration. To use a different size (`tiny`, `small`, `medium`, `large`), edit the `MODEL_URL` and the resource name lookup must match.
-
-## Signing & entitlements
-
-`project.yml` sets `CODE_SIGN_IDENTITY: "-"` (ad-hoc) and `ENABLE_HARDENED_RUNTIME: false` — this is a local-dev configuration, not distributable. The entitlements file declares only `com.apple.security.device.audio-input`. Sandboxing is off (no `com.apple.security.app-sandbox`); this is required because `CGEvent.post(tap: .cghidEventTap)` and Accessibility API access are incompatible with the App Sandbox without additional plumbing. Do not enable sandboxing without rethinking the paste mechanism.
-
-`OTHER_LDFLAGS: -lc++` is required because whisper.cpp/ggml have C++ symbols.
-
-## Conventions specific to this codebase
-
-- All UI state lives on `AppState` (`@MainActor`). Background work (recording, transcription) hops to background via `Task` then writes results back through `@Published` properties — keep that discipline; do not mutate `@Published` from off-main contexts.
-- `WhisperEngine` is an `actor` for serialization of C-pointer access. Call it with `await`; never store the `OpaquePointer` outside the actor.
-- Files live flat under `Sources/Voxly/`. The project is small enough (~7 Swift files) that subdirectories aren't worth the xcodegen churn. New files added there are picked up on next `xcodegen generate`.
+- All UI state flows through `@MainActor` classes with `@Published` properties; background work hops via `Task` and writes back on the main actor. Do not mutate `@Published` off-main.
+- New Swift files go under the matching `Sources/Voxly/` subdirectory and are picked up on the next `xcodegen generate`.

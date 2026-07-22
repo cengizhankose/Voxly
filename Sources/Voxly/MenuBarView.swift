@@ -48,9 +48,11 @@ struct MenuBarView: View {
                     .font(.system(size: 13, weight: .bold))
                 Text(appState.isRecording ? "Stop recording" : "Start recording")
                 Spacer()
-                Text("⌥D")
-                    .font(Theme.mono(12, .semibold))
-                    .opacity(0.85)
+                if let shortcutLabel {
+                    Text(shortcutLabel)
+                        .font(Theme.mono(12, .semibold))
+                        .opacity(0.85)
+                }
             }
         }
         .buttonStyle(PrimaryButtonStyle())
@@ -87,15 +89,28 @@ struct MenuBarView: View {
         .voxlyCard(padding: 12)
     }
 
+    /// Current binding, or nil when unbound. Shared by the record button hint
+    /// and the hotkey row so they can never disagree after a rebind.
+    private var shortcutLabel: String? {
+        KeyboardShortcuts.getShortcut(for: .toggleDictation).map(String.init(describing:))
+    }
+
+    // Deliberately NOT a `KeyboardShortcuts.Recorder`: focusing a recorder sets
+    // `KeyboardShortcuts.isPaused = true`, and the menu-bar panel is a
+    // non-activating window that never resigns key on dismiss — so the pause
+    // sticks and the global hotkey stays dead until relaunch. Rebinding lives
+    // in Settings/Onboarding, whose real windows unpause correctly.
     private var hotkeyRow: some View {
         HStack {
             Text("Hotkey")
                 .font(Theme.mono(11))
                 .foregroundColor(Theme.muted)
             Spacer()
-            KeyboardShortcuts.Recorder(for: .toggleDictation)
-                .frame(maxWidth: 160)
+            Text(shortcutLabel ?? "None")
+                .font(Theme.mono(12, .semibold))
+                .foregroundColor(Theme.text)
         }
+        .help("Change the hotkey in Settings — Open Voxly → Settings")
     }
 
     private var footer: some View {

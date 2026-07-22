@@ -26,6 +26,7 @@ final class AudioRecorder {
         guard inputFormat.sampleRate > 0 else {
             throw AudioRecorderError.noInputDevice
         }
+        log.notice("Input tap format: \(inputFormat.sampleRate, format: .fixed(precision: 0))Hz \(inputFormat.channelCount)ch")
 
         // Target format: 16kHz mono Float32
         guard let targetFormat = AVAudioFormat(
