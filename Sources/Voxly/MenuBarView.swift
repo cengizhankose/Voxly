@@ -48,9 +48,11 @@ struct MenuBarView: View {
                     .font(.system(size: 13, weight: .bold))
                 Text(appState.isRecording ? "Stop recording" : "Start recording")
                 Spacer()
-                Text("⌥D")
-                    .font(Theme.mono(12, .semibold))
-                    .opacity(0.85)
+                if let shortcutLabel {
+                    Text(shortcutLabel)
+                        .font(Theme.mono(12, .semibold))
+                        .opacity(0.85)
+                }
             }
         }
         .buttonStyle(PrimaryButtonStyle())
@@ -87,6 +89,12 @@ struct MenuBarView: View {
         .voxlyCard(padding: 12)
     }
 
+    /// Current binding, or nil when unbound. Shared by the record button hint
+    /// and the hotkey row so they can never disagree after a rebind.
+    private var shortcutLabel: String? {
+        KeyboardShortcuts.getShortcut(for: .toggleDictation).map(String.init(describing:))
+    }
+
     // Deliberately NOT a `KeyboardShortcuts.Recorder`: focusing a recorder sets
     // `KeyboardShortcuts.isPaused = true`, and the menu-bar panel is a
     // non-activating window that never resigns key on dismiss — so the pause
@@ -98,7 +106,7 @@ struct MenuBarView: View {
                 .font(Theme.mono(11))
                 .foregroundColor(Theme.muted)
             Spacer()
-            Text(KeyboardShortcuts.getShortcut(for: .toggleDictation).map(String.init(describing:)) ?? "None")
+            Text(shortcutLabel ?? "None")
                 .font(Theme.mono(12, .semibold))
                 .foregroundColor(Theme.text)
         }

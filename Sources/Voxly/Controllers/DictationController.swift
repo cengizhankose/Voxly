@@ -31,6 +31,7 @@ final class DictationController: ObservableObject {
     let textInserter = TextInserter()
 
     private var recordingStartedAt: Date?
+    private var noSpeechResetTask: Task<Void, Never>?
 
     /// True once `loadModel` has succeeded. Recording is allowed only after this flips.
     private(set) var modelReady = false
@@ -167,6 +168,7 @@ final class DictationController: ObservableObject {
                 signalNoSpeech()
             } else {
                 lastTranscript = text
+                clearNoSpeechSignal()
 
                 deliver(text: text, accessibilityGranted: accessibilityGranted)
                 onTranscript?(text, duration, target, langHint, currentModelName)
@@ -176,14 +178,24 @@ final class DictationController: ObservableObject {
     }
 
     /// Audible + visual cue that the cycle completed but yielded nothing:
-    /// system sound now, `mic.slash` menu bar icon for a few seconds.
+    /// system sound now, `mic.slash` menu bar icon for a few seconds. The
+    /// pending reset is cancelled on each signal (and on success) so an older
+    /// timer can't clear — or outlive — a newer cycle's state.
     private func signalNoSpeech() {
         NSSound(named: "Basso")?.play()
         lastCycleProducedNoSpeech = true
-        Task { @MainActor in
+        noSpeechResetTask?.cancel()
+        noSpeechResetTask = Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: 3_000_000_000)
-            lastCycleProducedNoSpeech = false
+            guard !Task.isCancelled else { return }
+            self?.lastCycleProducedNoSpeech = false
         }
+    }
+
+    private func clearNoSpeechSignal() {
+        noSpeechResetTask?.cancel()
+        noSpeechResetTask = nil
+        lastCycleProducedNoSpeech = false
     }
 
     /// Strip whisper placeholder tokens like `[BLANK_AUDIO]`, `[Music]`,
